@@ -26,19 +26,19 @@ export class PlaywrightExecutor implements BrowserExecutor {
           await page.goto(action.url, { waitUntil: "domcontentloaded" });
           return { status: "success" };
         case "click":
-          await (await resolveLocator(page, action.target.elementId)).click();
+          await (await resolveLocator(page, action.target.elementId)).click({ timeout: 5000 });
           return { status: "success" };
         case "fill":
-          await (await resolveLocator(page, action.target.elementId)).fill(action.value);
+          await (await resolveLocator(page, action.target.elementId)).fill(action.value, { timeout: 5000 });
           return { status: "success" };
         case "press":
-          await (await resolveLocator(page, action.target.elementId)).press(action.key);
+          await (await resolveLocator(page, action.target.elementId)).press(action.key, { timeout: 5000 });
           return { status: "success" };
         case "select":
-          await (await resolveLocator(page, action.target.elementId)).selectOption(action.value);
+          await (await resolveLocator(page, action.target.elementId)).selectOption(action.value, { timeout: 5000 });
           return { status: "success" };
         case "hover":
-          await (await resolveLocator(page, action.target.elementId)).hover();
+          await (await resolveLocator(page, action.target.elementId)).hover({ timeout: 5000 });
           return { status: "success" };
         case "scroll":
           await page.mouse.wheel(0, (action.amount ?? 300) * (action.direction === "down" ? 1 : -1));

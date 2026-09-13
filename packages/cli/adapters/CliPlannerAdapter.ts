@@ -61,15 +61,31 @@ export class CliPlannerAdapter implements Planner {
     }
 
     // Step 3: If we see success/confirmation text, assert it
-    if (
-      pageContains(observation.text, "order confirmed") ||
-      pageContains(observation.text, "success") ||
-      pageContains(observation.text, "thank you")
-    ) {
+    if (pageContains(observation.text, "order confirmed")) {
       return {
         type: "assert",
         assertion: { type: "textVisible", text: "Order confirmed" },
         reason: "Verify checkout completion",
+        confidence: 0.9,
+        risk: "read",
+      };
+    }
+
+    if (pageContains(observation.text, "success")) {
+      return {
+        type: "assert",
+        assertion: { type: "textVisible", text: "Success" },
+        reason: "Verify success state",
+        confidence: 0.9,
+        risk: "read",
+      };
+    }
+
+    if (pageContains(observation.text, "thank you")) {
+      return {
+        type: "assert",
+        assertion: { type: "textVisible", text: "Thank you" },
+        reason: "Verify thank-you state",
         confidence: 0.9,
         risk: "read",
       };

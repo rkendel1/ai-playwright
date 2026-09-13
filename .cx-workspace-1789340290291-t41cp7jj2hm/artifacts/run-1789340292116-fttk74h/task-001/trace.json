@@ -1,0 +1,304 @@
+{
+  "status": "passed",
+  "steps": [
+    {
+      "index": 1,
+      "observation": {
+        "id": "obs-1",
+        "generation": 1,
+        "url": "about:blank",
+        "title": "",
+        "text": "",
+        "elements": []
+      },
+      "action": {
+        "type": "goto",
+        "url": "http://127.0.0.1:44995/",
+        "reason": "Navigate to target application",
+        "confidence": 0.95,
+        "risk": "write"
+      },
+      "validation": {
+        "status": "success"
+      },
+      "result": {
+        "status": "success"
+      },
+      "timestamp": 1789340292262,
+      "telemetry": {
+        "observationMs": 4,
+        "inferenceMs": 0,
+        "validationMs": 3,
+        "executionMs": 11,
+        "inputTokens": 51,
+        "outputTokens": 31
+      },
+      "planner": {
+        "provider": "deterministic"
+      }
+    },
+    {
+      "index": 2,
+      "observation": {
+        "id": "obs-1",
+        "generation": 1,
+        "url": "http://127.0.0.1:44995/",
+        "title": "Checkout Demo",
+        "text": "Checkout Demo\n\nWelcome to the demo store.\n\nProceed to Checkout",
+        "elements": [
+          {
+            "id": "e1",
+            "role": "button",
+            "name": "Proceed to Checkout",
+            "value": "",
+            "state": {
+              "visible": true,
+              "enabled": true
+            }
+          }
+        ]
+      },
+      "action": {
+        "type": "click",
+        "target": {
+          "observationId": "obs-1",
+          "elementId": "e1"
+        },
+        "reason": "Click checkout button",
+        "confidence": 0.9,
+        "risk": "write"
+      },
+      "validation": {
+        "status": "success"
+      },
+      "result": {
+        "status": "success"
+      },
+      "timestamp": 1789340292340,
+      "telemetry": {
+        "observationMs": 2,
+        "inferenceMs": 1,
+        "validationMs": 0,
+        "executionMs": 22,
+        "inputTokens": 223,
+        "outputTokens": 34
+      },
+      "planner": {
+        "provider": "deterministic"
+      }
+    },
+    {
+      "index": 3,
+      "observation": {
+        "id": "obs-1",
+        "generation": 1,
+        "url": "http://127.0.0.1:44995/checkout",
+        "title": "Checkout",
+        "text": "Checkout\n\nEnter your email to complete checkout.\n\nEmail Address  Submit payment",
+        "elements": [
+          {
+            "id": "e1",
+            "role": "textbox",
+            "name": "Email Address",
+            "value": "",
+            "state": {
+              "visible": true,
+              "enabled": true,
+              "checked": false
+            }
+          },
+          {
+            "id": "e2",
+            "role": "button",
+            "name": "Submit payment",
+            "value": "",
+            "state": {
+              "visible": true,
+              "enabled": true
+            }
+          }
+        ]
+      },
+      "action": {
+        "type": "fill",
+        "target": {
+          "observationId": "obs-1",
+          "elementId": "e1"
+        },
+        "value": "test@example.com",
+        "reason": "Enter email address",
+        "confidence": 0.85,
+        "risk": "write"
+      },
+      "validation": {
+        "status": "success"
+      },
+      "result": {
+        "status": "success"
+      },
+      "timestamp": 1789340292395,
+      "telemetry": {
+        "observationMs": 3,
+        "inferenceMs": 0,
+        "validationMs": 1,
+        "executionMs": 14,
+        "inputTokens": 431,
+        "outputTokens": 40
+      },
+      "planner": {
+        "provider": "deterministic"
+      }
+    },
+    {
+      "index": 4,
+      "observation": {
+        "id": "obs-2",
+        "generation": 2,
+        "url": "http://127.0.0.1:44995/checkout",
+        "title": "Checkout",
+        "text": "Checkout\n\nEnter your email to complete checkout.\n\nEmail Address  Submit payment",
+        "elements": [
+          {
+            "id": "e1",
+            "role": "textbox",
+            "name": "Email Address",
+            "value": "test@example.com",
+            "state": {
+              "visible": true,
+              "enabled": true,
+              "checked": false
+            }
+          },
+          {
+            "id": "e2",
+            "role": "button",
+            "name": "Submit payment",
+            "value": "",
+            "state": {
+              "visible": true,
+              "enabled": true
+            }
+          }
+        ]
+      },
+      "action": {
+        "type": "click",
+        "target": {
+          "observationId": "obs-2",
+          "elementId": "e2"
+        },
+        "reason": "Submit checkout form",
+        "confidence": 0.88,
+        "risk": "write"
+      },
+      "validation": {
+        "status": "success"
+      },
+      "result": {
+        "status": "success"
+      },
+      "timestamp": 1789340292473,
+      "telemetry": {
+        "observationMs": 2,
+        "inferenceMs": 0,
+        "validationMs": 0,
+        "executionMs": 43,
+        "inputTokens": 650,
+        "outputTokens": 34
+      },
+      "planner": {
+        "provider": "deterministic"
+      }
+    },
+    {
+      "index": 5,
+      "observation": {
+        "id": "obs-1",
+        "generation": 1,
+        "url": "http://127.0.0.1:44995/confirmation",
+        "title": "Confirmation",
+        "text": "Order confirmed\n\nYour order has been received.",
+        "elements": []
+      },
+      "action": {
+        "type": "assert",
+        "assertion": {
+          "type": "textVisible",
+          "text": "Order confirmed"
+        },
+        "reason": "Verify checkout completion",
+        "confidence": 0.9,
+        "risk": "read"
+      },
+      "validation": {
+        "status": "success"
+      },
+      "result": {
+        "status": "success",
+        "output": "Order confirmed"
+      },
+      "timestamp": 1789340292532,
+      "telemetry": {
+        "observationMs": 2,
+        "inferenceMs": 0,
+        "validationMs": 1,
+        "executionMs": 2,
+        "inputTokens": 796,
+        "outputTokens": 37
+      },
+      "planner": {
+        "provider": "deterministic"
+      }
+    },
+    {
+      "index": 6,
+      "observation": {
+        "id": "obs-2",
+        "generation": 2,
+        "url": "http://127.0.0.1:44995/confirmation",
+        "title": "Confirmation",
+        "text": "Order confirmed\n\nYour order has been received.",
+        "elements": []
+      },
+      "action": {
+        "type": "finish",
+        "result": "success",
+        "reason": "Checkout verification complete",
+        "confidence": 0.95,
+        "risk": "read"
+      },
+      "validation": {
+        "status": "success"
+      },
+      "result": {
+        "status": "success"
+      },
+      "timestamp": 1789340292560,
+      "telemetry": {
+        "observationMs": 1,
+        "inferenceMs": 0,
+        "validationMs": 1,
+        "executionMs": 0,
+        "inputTokens": 952,
+        "outputTokens": 28
+      },
+      "planner": {
+        "provider": "deterministic"
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "type": "assertion",
+      "assertion": "text 'Order confirmed' is visible",
+      "result": "passed"
+    },
+    {
+      "type": "limit",
+      "assertion": "Task completed within step budget",
+      "result": "passed"
+    }
+  ],
+  "artifactsPath": "/home/runner/work/ai-playwright/ai-playwright/.cx-workspace-1789340290291-t41cp7jj2hm/artifacts/run-1789340292116-fttk74h/task-001",
+  "durationMs": 389
+}

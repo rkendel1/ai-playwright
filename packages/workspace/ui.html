@@ -1,0 +1,1365 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Playwright</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f3f6fb;
+      color: #10233f;
+    }
+    button, input, textarea {
+      font: inherit;
+    }
+    .container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #335eea;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 34px;
+      line-height: 1.1;
+    }
+    .subtitle {
+      margin: 12px 0 0;
+      max-width: 720px;
+      color: #49617f;
+      line-height: 1.5;
+    }
+    .runtime-truth {
+      display: grid;
+      gap: 10px;
+      min-width: 270px;
+      padding: 16px 18px;
+      background: #ffffff;
+      border: 1px solid #dce6f5;
+      border-radius: 16px;
+      box-shadow: 0 16px 32px rgba(16, 35, 63, 0.08);
+    }
+    .runtime-truth div {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: 13px;
+      color: #49617f;
+    }
+    .runtime-truth strong {
+      color: #10233f;
+      font-weight: 700;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+    .panel {
+      background: #ffffff;
+      border: 1px solid #dce6f5;
+      border-radius: 20px;
+      box-shadow: 0 16px 32px rgba(16, 35, 63, 0.08);
+    }
+    .tests-panel {
+      padding: 20px;
+      position: sticky;
+      top: 24px;
+    }
+    .detail-panel {
+      padding: 24px;
+      min-height: 760px;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    h2, h3, h4, p {
+      margin-top: 0;
+    }
+    .panel-title {
+      margin: 0;
+      font-size: 20px;
+    }
+    .panel-subtitle {
+      margin: 4px 0 0;
+      color: #5d7694;
+      font-size: 13px;
+    }
+    .primary-button,
+    .secondary-button,
+    .danger-button,
+    .ghost-button,
+    .step-button {
+      border: 0;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.12s ease, opacity 0.12s ease, background 0.12s ease;
+    }
+    .primary-button:hover,
+    .secondary-button:hover,
+    .danger-button:hover,
+    .ghost-button:hover,
+    .step-button:hover {
+      transform: translateY(-1px);
+    }
+    .primary-button:disabled,
+    .secondary-button:disabled,
+    .danger-button:disabled,
+    .ghost-button:disabled,
+    .step-button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .primary-button {
+      background: linear-gradient(135deg, #335eea, #2647b8);
+      color: #ffffff;
+      padding: 12px 16px;
+      font-weight: 600;
+    }
+    .secondary-button {
+      background: #eef4ff;
+      color: #2347b1;
+      padding: 11px 14px;
+      font-weight: 600;
+    }
+    .danger-button {
+      background: #fff1f1;
+      color: #c53030;
+      padding: 11px 14px;
+      font-weight: 600;
+    }
+    .ghost-button {
+      background: transparent;
+      color: #49617f;
+      padding: 10px 14px;
+      font-weight: 600;
+    }
+    .full-width {
+      width: 100%;
+    }
+    .muted {
+      color: #5d7694;
+    }
+    .empty-state,
+    .placeholder {
+      padding: 32px 20px;
+      border: 1px dashed #c8d5ea;
+      border-radius: 16px;
+      text-align: center;
+      color: #5d7694;
+      background: #f8fbff;
+    }
+    .empty-state h3,
+    .placeholder h3 {
+      margin-bottom: 10px;
+      color: #10233f;
+    }
+    .tests-list,
+    .suite-runs-list,
+    .run-history-list,
+    .suite-tests,
+    .step-list {
+      display: grid;
+      gap: 12px;
+    }
+    .test-card,
+    .suite-run-card,
+    .run-history-card,
+    .suite-test-card,
+    .step-button {
+      width: 100%;
+      text-align: left;
+      padding: 14px 16px;
+      background: #ffffff;
+      border: 1px solid #dce6f5;
+      border-radius: 16px;
+    }
+    .test-card.active,
+    .suite-run-card.active,
+    .step-button.active {
+      border-color: #335eea;
+      box-shadow: 0 0 0 3px rgba(51, 94, 234, 0.14);
+      background: #f7faff;
+    }
+    .status-row,
+    .card-meta,
+    .info-row,
+    .timeline-row,
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .status-row {
+      margin-bottom: 6px;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      background: #ecf2ff;
+      color: #2347b1;
+    }
+    .status-pill.passed { background: #ecfff2; color: #20744a; }
+    .status-pill.failed { background: #fff1f1; color: #c53030; }
+    .status-pill.blocked { background: #fff8e7; color: #9c6a00; }
+    .status-pill.running { background: #eef4ff; color: #2347b1; }
+    .status-pill.new { background: #edf2f7; color: #55657a; }
+    .status-icon {
+      font-size: 16px;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #10233f;
+    }
+    .card-description,
+    .card-meta,
+    .small-text {
+      font-size: 13px;
+      color: #5d7694;
+      line-height: 1.45;
+    }
+    .card-meta {
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .section {
+      margin-top: 24px;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .section-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #335eea;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .info-card,
+    .summary-card,
+    .timeline-card,
+    .evidence-card,
+    .step-detail-card {
+      background: #f8fbff;
+      border: 1px solid #dce6f5;
+      border-radius: 16px;
+      padding: 16px;
+    }
+    .info-card.wide,
+    .summary-card.wide,
+    .step-detail-card.wide {
+      grid-column: 1 / -1;
+    }
+    .info-label,
+    .summary-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #5d7694;
+      margin-bottom: 8px;
+    }
+    .info-value,
+    .summary-value {
+      font-size: 15px;
+      color: #10233f;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .info-value code,
+    .summary-value code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      background: rgba(51, 94, 234, 0.08);
+      padding: 2px 6px;
+      border-radius: 8px;
+    }
+    .summary-grid,
+    .timeline-grid,
+    .step-detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .timeline-grid {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+    .timeline-card.active {
+      border-color: #335eea;
+      box-shadow: 0 0 0 3px rgba(51, 94, 234, 0.12);
+    }
+    .timeline-card.failed {
+      border-color: #f1c0c0;
+      background: #fff7f7;
+    }
+    .timeline-status {
+      margin-top: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #49617f;
+      text-transform: uppercase;
+    }
+    .running-flow {
+      display: grid;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .running-step {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid #dce6f5;
+      background: #f8fbff;
+    }
+    .running-step.active {
+      border-color: #335eea;
+      background: #eef4ff;
+    }
+    .running-step.complete {
+      border-color: #bce0c9;
+      background: #f1fff6;
+    }
+    .arrow {
+      text-align: center;
+      color: #335eea;
+      font-size: 20px;
+      line-height: 1;
+      margin: 2px 0;
+    }
+    .modal.hidden {
+      display: none;
+    }
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(16, 35, 63, 0.5);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      z-index: 1000;
+    }
+    .modal-card {
+      width: min(560px, 100%);
+      background: #ffffff;
+      border-radius: 20px;
+      border: 1px solid #dce6f5;
+      box-shadow: 0 24px 60px rgba(16, 35, 63, 0.22);
+      padding: 24px;
+    }
+    .form-grid {
+      display: grid;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .form-field {
+      display: grid;
+      gap: 8px;
+    }
+    .form-field label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #274160;
+    }
+    .form-field input,
+    .form-field textarea {
+      width: 100%;
+      border: 1px solid #c9d7ea;
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: #fbfdff;
+      color: #10233f;
+    }
+    .form-field textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+    .modal-actions,
+    .detail-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+    .split-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre-wrap;
+    }
+    @media (max-width: 1100px) {
+      .layout { grid-template-columns: 1fr; }
+      .tests-panel { position: static; }
+      .timeline-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .info-grid, .summary-grid, .step-detail-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <p class="eyebrow">AI Playwright</p>
+        <h1>Visible end-to-end browser testing</h1>
+        <p class="subtitle">Describe what you want tested. AI Playwright plans the browser actions, executes them against a real browser, and preserves evidence when something goes wrong.</p>
+      </div>
+      <div class="runtime-truth">
+        <div><span>Planner</span><strong>WebLLM / Deterministic</strong></div>
+        <div><span>Execution</span><strong>Playwright</strong></div>
+        <div><span>Browser</span><strong>Obscura</strong></div>
+        <div><span>Semantic control</span><strong>aipw-core</strong></div>
+        <div><span>Persistence</span><strong>Workspace filesystem</strong></div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <aside class="panel tests-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Tests</h2>
+            <p id="tests-summary" class="panel-subtitle">Loading workspace…</p>
+          </div>
+          <button id="header-new-test-button" class="primary-button" type="button" onclick="openNewTestForm()">+ New Test</button>
+        </div>
+        <div id="tests-list" class="tests-list"></div>
+        <div class="section">
+          <button id="run-all-button" class="primary-button full-width" type="button" onclick="runSuite()">Run All Tests</button>
+        </div>
+        <div class="section">
+          <div class="section-header">
+            <h3 class="section-title">Suite Runs</h3>
+          </div>
+          <div id="suite-runs-list" class="suite-runs-list"></div>
+        </div>
+      </aside>
+
+      <main class="panel detail-panel">
+        <div id="result-content"></div>
+      </main>
+    </div>
+  </div>
+
+  <div id="new-test-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="new-test-title">
+    <div class="modal-card">
+      <div class="split-header">
+        <div>
+          <p id="new-test-mode" class="eyebrow" style="margin-bottom: 6px;">Create Test</p>
+          <h2 id="new-test-title" style="margin-bottom: 8px;">New Test</h2>
+          <p class="muted" id="new-test-description">Create a new AI Playwright workspace test.</p>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="new-test-name">Name</label>
+          <input id="new-test-name" type="text" autocomplete="off" />
+        </div>
+        <div class="form-field">
+          <label for="new-test-url">URL</label>
+          <input id="new-test-url" type="url" autocomplete="off" placeholder="http://127.0.0.1:3000" />
+        </div>
+        <div class="form-field">
+          <label for="new-test-task">Task</label>
+          <textarea id="new-test-task"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="ghost-button" type="button" onclick="closeNewTestForm()">Cancel</button>
+        <button class="primary-button" type="button" onclick="submitNewTestForm()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      tests: [],
+      suiteRuns: [],
+      selectedTestId: null,
+      selectedRun: null,
+      selectedSuiteRun: null,
+      selectedStepIndex: null,
+      currentView: 'welcome',
+      isRunning: false,
+      runningTest: null,
+      runningSuite: null,
+      editTestId: null,
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function statusClass(status) {
+      if (status === 'pass') return 'passed';
+      if (status === 'fail') return 'failed';
+      return status || 'new';
+    }
+
+    function statusLabel(status) {
+      if (status === 'pass') return 'PASS';
+      if (status === 'fail') return 'FAIL';
+      if (status === 'passed') return 'PASS';
+      if (status === 'failed') return 'FAIL';
+      if (status === 'blocked') return 'BLOCKED';
+      if (status === 'running') return 'RUNNING';
+      if (status === 'new') return 'NEW';
+      return String(status || 'new').toUpperCase();
+    }
+
+    function statusIcon(status) {
+      if (status === 'passed' || status === 'pass') return '✓';
+      if (status === 'failed' || status === 'fail') return '✗';
+      if (status === 'blocked') return '⊘';
+      if (status === 'running') return '→';
+      return '○';
+    }
+
+    function plannerLabel(planner) {
+      return planner === 'webllm' ? 'WebLLM' : planner === 'mock' ? 'Mock' : 'Deterministic';
+    }
+
+    function browserLabel(browser) {
+      return browser === 'obscura' ? 'Obscura' : browser || 'Obscura';
+    }
+
+    function formatTimestamp(timestamp) {
+      if (!timestamp) return 'Never';
+      return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(new Date(timestamp));
+    }
+
+    function formatDuration(durationMs) {
+      if (!durationMs && durationMs !== 0) return '—';
+      return (durationMs / 1000).toFixed(1) + 's';
+    }
+
+    function selectedTest() {
+      return state.tests.find((test) => test.id === state.selectedTestId) || null;
+    }
+
+    function setSelectedTest(testId) {
+      state.selectedTestId = testId;
+      state.selectedRun = null;
+      state.selectedSuiteRun = null;
+      state.selectedStepIndex = null;
+      state.currentView = testId ? 'test' : 'welcome';
+      render();
+    }
+
+    function titleCase(value) {
+      return String(value || '')
+        .split(/[-_\s]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+    }
+
+    function observationElement(step) {
+      const target = step?.action?.target;
+      if (!target || !step?.observation?.elements) return null;
+      return step.observation.elements.find((element) => element.id === target.elementId) || null;
+    }
+
+    function stepTitle(step) {
+      const type = step?.action?.type || 'observe';
+      if (type === 'goto') return 'Navigate';
+      if (type === 'click') {
+        const element = observationElement(step);
+        return element?.name ? 'Click ' + element.name : 'Click';
+      }
+      if (type === 'fill') {
+        const element = observationElement(step);
+        return element?.name ? 'Fill ' + element.name : 'Fill';
+      }
+      if (type === 'assert') return 'Assert';
+      if (type === 'finish') return 'Finish';
+      if (type === 'blocked') return 'Blocked';
+      return titleCase(type);
+    }
+
+    function stepAction(step) {
+      const action = step?.action || {};
+      const element = observationElement(step);
+      if (action.type === 'goto') return action.url;
+      if (action.type === 'click') return element?.name ? 'Click "' + element.name + '"' : 'Click element';
+      if (action.type === 'fill') return element?.name ? 'Fill "' + element.name + '" with "' + (action.value || '') + '"' : 'Fill text';
+      if (action.type === 'assert') return action.assertion?.text ? 'Assert "' + action.assertion.text + '"' : 'Assert expected condition';
+      if (action.type === 'finish') return action.result || 'Finish run';
+      if (action.type === 'blocked') return action.reason || 'Planner blocked execution';
+      return action.description || titleCase(action.type || 'observe');
+    }
+
+    function errorSummary(run, step) {
+      const element = observationElement(step);
+      const rawError = step?.result?.error || run?.failure?.message || 'Unknown error';
+      if (rawError.includes('intercepts pointer events') && element?.name) {
+        return 'Element "' + element.name + '" was blocked by another page element';
+      }
+      if (rawError.includes('not found') && element?.name) {
+        return 'Element "' + element.name + '" was not found';
+      }
+      return rawError;
+    }
+
+    function renderTests() {
+      const list = document.getElementById('tests-list');
+      const summary = document.getElementById('tests-summary');
+      const runAllButton = document.getElementById('run-all-button');
+      const headerNewTestButton = document.getElementById('header-new-test-button');
+      summary.textContent = state.tests.length === 0 ? 'Clean workspace' : state.tests.length + ' test' + (state.tests.length === 1 ? '' : 's');
+      runAllButton.disabled = state.tests.length === 0 || state.isRunning;
+      headerNewTestButton.style.display = state.tests.length === 0 ? 'none' : 'inline-flex';
+
+      if (state.tests.length === 0) {
+        list.innerHTML = '<div class="empty-state"><h3>No tests yet</h3><p>Create your first test to begin the workspace journey.</p><div style="margin-top: 16px;"><button class="primary-button" type="button" onclick="openNewTestForm()">+ New Test</button></div></div>';
+        return;
+      }
+
+      list.innerHTML = state.tests.map((test) => {
+        const testStatus = statusClass(test.status);
+        return `
+          <button class="test-card ${state.selectedTestId === test.id && state.currentView !== 'suite' ? 'active' : ''}" type="button" onclick="setSelectedTest('${test.id}')">
+            <div class="status-row">
+              <div class="card-title">${statusIcon(test.status)} ${escapeHtml(test.name)}</div>
+              <span class="status-pill ${testStatus}">${statusLabel(test.status)}</span>
+            </div>
+            <div class="card-meta">
+              <div>${escapeHtml(test.url || '(default workspace URL)')}</div>
+              <div>Last run: ${formatTimestamp(test.lastRun)}</div>
+              <div>Planner: ${plannerLabel(test.planner)} · Browser: ${browserLabel(test.browser)}</div>
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderSuiteRuns() {
+      const list = document.getElementById('suite-runs-list');
+      if (state.suiteRuns.length === 0) {
+        list.innerHTML = '<div class="empty-state"><h3>No suite runs yet</h3><p>Run the full suite to persist historical evidence.</p></div>';
+        return;
+      }
+
+      list.innerHTML = state.suiteRuns.slice(0, 10).map((run) => {
+        const passed = run.tests.filter((test) => test.status === 'passed').length;
+        const failed = run.tests.filter((test) => test.status === 'failed').length;
+        const blocked = run.tests.filter((test) => test.status === 'blocked').length;
+        return `
+          <button class="suite-run-card ${state.selectedSuiteRun?.id === run.id && state.currentView === 'suite' ? 'active' : ''}" type="button" onclick="selectSuiteRun('${run.id}')">
+            <div class="status-row">
+              <div class="card-title">${statusLabel(run.status)}</div>
+              <span class="status-pill ${statusClass(run.status)}">${formatDuration(run.durationMs)}</span>
+            </div>
+            <div class="card-meta">
+              <div>${formatTimestamp(run.finishedAt || run.startedAt)}</div>
+              <div>${passed} passed · ${failed} failed · ${blocked} blocked</div>
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderWelcome() {
+      document.getElementById('result-content').innerHTML = `
+        <div class="placeholder">
+          <h3>Canonical AI Playwright journey</h3>
+          <p>Initialize a clean workspace, create tests, run an individual journey, inspect evidence, run the full suite, and return later to the saved history.</p>
+        </div>
+      `;
+    }
+
+    async function loadRunHistory(testId) {
+      const response = await fetch('/api/tests/' + testId + '/runs');
+      return await response.json();
+    }
+
+    function renderTestDetail() {
+      const test = selectedTest();
+      if (!test) {
+        renderWelcome();
+        return;
+      }
+
+      const failure = test.failure;
+      document.getElementById('result-content').innerHTML = `
+        <div class="split-header">
+          <div>
+            <h2 style="margin-bottom: 6px;">${escapeHtml(test.name)}</h2>
+            <p class="muted">${escapeHtml(test.task)}</p>
+          </div>
+          <div class="detail-actions" style="margin-top: 0;">
+            <span class="status-pill ${statusClass(test.status)}">${statusLabel(test.status)}</span>
+            <button class="primary-button" type="button" onclick="runTest()" ${state.isRunning ? 'disabled' : ''}>${state.isRunning ? 'Running…' : 'Run Test'}</button>
+            <button class="secondary-button" type="button" onclick="openEditTestForm()">Edit</button>
+            <button class="danger-button" type="button" onclick="deleteTestConfirm()">Delete</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-header"><h3 class="section-title">Test Workspace</h3></div>
+          <div class="info-grid">
+            <div class="info-card"><span class="info-label">Status</span><div class="info-value">${statusIcon(test.status)} ${statusLabel(test.status)}</div></div>
+            <div class="info-card"><span class="info-label">Last Run</span><div class="info-value">${formatTimestamp(test.lastRun)}</div></div>
+            <div class="info-card wide"><span class="info-label">URL</span><div class="info-value"><code>${escapeHtml(test.url || '(default workspace URL)')}</code></div></div>
+            <div class="info-card"><span class="info-label">Planner</span><div class="info-value">${plannerLabel(test.planner)}</div></div>
+            <div class="info-card"><span class="info-label">Browser</span><div class="info-value">${browserLabel(test.browser)}</div></div>
+          </div>
+        </div>
+
+        ${failure ? `
+          <div class="section">
+            <div class="section-header"><h3 class="section-title">Latest Failure</h3></div>
+            <div class="summary-grid">
+              <div class="summary-card"><span class="summary-label">Phase</span><div class="summary-value">${escapeHtml(failure.phase)}</div></div>
+              <div class="summary-card"><span class="summary-label">Step</span><div class="summary-value">${failure.step ?? '—'}</div></div>
+              <div class="summary-card wide"><span class="summary-label">Reason</span><div class="summary-value mono">${escapeHtml(failure.message)}</div></div>
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="section">
+          <div class="section-header"><h3 class="section-title">Run History</h3></div>
+          <div id="run-history-section" class="run-history-list"><div class="empty-state"><h3>Loading run history</h3></div></div>
+        </div>
+      `;
+
+      loadRunHistory(test.id)
+        .then((runs) => {
+          const section = document.getElementById('run-history-section');
+          if (!runs.length) {
+            section.innerHTML = '<div class="empty-state"><h3>No runs yet</h3><p>Run the test to collect evidence.</p></div>';
+            return;
+          }
+          section.innerHTML = runs.slice(0, 6).map((run) => `
+            <button class="run-history-card" type="button" onclick="viewRun('${run.id}')">
+              <div class="status-row">
+                <div class="card-title">${statusIcon(run.status)} ${statusLabel(run.status)}</div>
+                <span class="status-pill ${statusClass(run.status)}">${formatDuration(run.durationMs)}</span>
+              </div>
+              <div class="card-meta">
+                <div>${formatTimestamp(run.finishedAt || run.startedAt)}</div>
+                <div>${escapeHtml(run.id)}</div>
+              </div>
+            </button>
+          `).join('');
+        })
+        .catch(() => {
+          const section = document.getElementById('run-history-section');
+          section.innerHTML = '<div class="empty-state"><h3>Unable to load run history</h3></div>';
+        });
+    }
+
+    function previewSteps(test) {
+      const planner = plannerLabel(test.planner);
+      return [
+        { label: 'Navigate', status: 'complete', detail: 'Open target application' },
+        { label: 'Observe', status: 'complete', detail: 'Capture page state and controls' },
+        { label: planner + ' planning', status: 'active', detail: 'Choose the next browser action' },
+        { label: 'Validate', status: 'pending', detail: 'Check action policy and safety' },
+        { label: 'Execute', status: 'pending', detail: 'Run against Playwright + Obscura' },
+      ];
+    }
+
+    function renderRunningTest() {
+      const running = state.runningTest;
+      if (!running) {
+        renderWelcome();
+        return;
+      }
+
+      document.getElementById('result-content').innerHTML = `
+        <div class="split-header">
+          <div>
+            <h2 style="margin-bottom: 6px;">${escapeHtml(running.name)}</h2>
+            <p class="muted">AI Playwright is actively planning and executing this test.</p>
+          </div>
+          <span class="status-pill running">Running</span>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-card"><span class="summary-label">Planner</span><div class="summary-value">${plannerLabel(running.planner)}</div></div>
+          <div class="summary-card"><span class="summary-label">Browser</span><div class="summary-value">${browserLabel(running.browser)}</div></div>
+          <div class="summary-card"><span class="summary-label">Step</span><div class="summary-value">3</div></div>
+          <div class="summary-card"><span class="summary-label">Execution</span><div class="summary-value">In progress</div></div>
+        </div>
+
+        <div class="section">
+          <div class="section-header"><h3 class="section-title">Runtime Flow</h3></div>
+          <div class="running-flow">
+            ${previewSteps(running).map((item) => `
+              <div class="running-step ${item.status === 'complete' ? 'complete' : item.status === 'active' ? 'active' : ''}">
+                <div>
+                  <div class="card-title">${item.status === 'complete' ? '✓' : item.status === 'active' ? '→' : '○'} ${escapeHtml(item.label)}</div>
+                  <div class="small-text">${escapeHtml(item.detail)}</div>
+                </div>
+                <div class="status-pill ${item.status === 'complete' ? 'passed' : item.status === 'active' ? 'running' : 'new'}">${item.status === 'complete' ? 'done' : item.status === 'active' ? 'active' : 'queued'}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderSuiteRunning() {
+      const running = state.runningSuite;
+      if (!running) {
+        renderWelcome();
+        return;
+      }
+
+      document.getElementById('result-content').innerHTML = `
+        <div class="split-header">
+          <div>
+            <h2 style="margin-bottom: 6px;">Test Suite</h2>
+            <p class="muted">Running the full workspace suite and collecting durable evidence.</p>
+          </div>
+          <span class="status-pill running">Running…</span>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-card"><span class="summary-label">Passed</span><div class="summary-value">${running.tests.filter((test) => test.status === 'passed').length}</div></div>
+          <div class="summary-card"><span class="summary-label">Failed</span><div class="summary-value">${running.tests.filter((test) => test.status === 'failed').length}</div></div>
+          <div class="summary-card"><span class="summary-label">Blocked</span><div class="summary-value">${running.tests.filter((test) => test.status === 'blocked').length}</div></div>
+          <div class="summary-card"><span class="summary-label">Result</span><div class="summary-value">Running</div></div>
+        </div>
+
+        <div class="section">
+          <div class="section-header"><h3 class="section-title">Suite Execution</h3></div>
+          <div class="suite-tests">
+            ${running.tests.map((test) => `
+              <div class="suite-test-card">
+                <div class="status-row">
+                  <div class="card-title">${statusIcon(test.status)} ${escapeHtml(test.name)}</div>
+                  <span class="status-pill ${statusClass(test.status)}">${statusLabel(test.status)}</span>
+                </div>
+                <div class="card-meta">
+                  <div>${plannerLabel(test.planner)} · ${browserLabel(test.browser)}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function suiteSummary(run) {
+      return {
+        passed: run.tests.filter((test) => test.status === 'passed').length,
+        failed: run.tests.filter((test) => test.status === 'failed').length,
+        blocked: run.tests.filter((test) => test.status === 'blocked').length,
+      };
+    }
+
+    function renderSuiteDetail() {
+      const run = state.selectedSuiteRun;
+      if (!run) {
+        renderWelcome();
+        return;
+      }
+      const summary = suiteSummary(run);
+      document.getElementById('result-content').innerHTML = `
+        <div class="split-header">
+          <div>
+            <h2 style="margin-bottom: 6px;">Test Suite</h2>
+            <p class="muted">Suite run ${escapeHtml(run.id)}</p>
+          </div>
+          <span class="status-pill ${statusClass(run.status)}">${statusLabel(run.status)}</span>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-card"><span class="summary-label">Passed</span><div class="summary-value">${summary.passed}</div></div>
+          <div class="summary-card"><span class="summary-label">Failed</span><div class="summary-value">${summary.failed}</div></div>
+          <div class="summary-card"><span class="summary-label">Blocked</span><div class="summary-value">${summary.blocked}</div></div>
+          <div class="summary-card"><span class="summary-label">Duration</span><div class="summary-value">${formatDuration(run.durationMs)}</div></div>
+        </div>
+
+        <div class="section">
+          <div class="section-header"><h3 class="section-title">Suite Result</h3></div>
+          <div class="suite-tests">
+            ${run.tests.map((test) => `
+              <button class="suite-test-card" type="button" onclick="viewRun('${test.runId}')">
+                <div class="status-row">
+                  <div class="card-title">${escapeHtml(test.testName)}</div>
+                  <span class="status-pill ${statusClass(test.status)}">${statusLabel(test.status)}</span>
+                </div>
+                <div class="card-meta">
+                  <div>${plannerLabel(test.planner)} · ${browserLabel(test.browser)}</div>
+                  <div>${formatDuration(test.durationMs)}</div>
+                </div>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTimeline(run, step) {
+      const planner = step?.planner?.provider ? plannerLabel(step.planner.provider) : plannerLabel(run.planner);
+      const validation = step?.validation?.status === 'failure' ? 'Failed' : 'Passed';
+      const execution = step?.result?.status === 'failure' ? 'Failed' : 'Passed';
+      const hasError = step?.result?.error || run?.failure?.message;
+      return `
+        <div class="timeline-grid">
+          <div class="timeline-card active">
+            <span class="summary-label">Observation</span>
+            <div class="summary-value">${escapeHtml(step?.observation?.title || 'Captured')}</div>
+            <div class="timeline-status">${escapeHtml(step?.observation?.url || 'Ready')}</div>
+          </div>
+          <div class="timeline-card active">
+            <span class="summary-label">Action</span>
+            <div class="summary-value">${escapeHtml(stepTitle(step))}</div>
+            <div class="timeline-status">${escapeHtml(stepAction(step))}</div>
+          </div>
+          <div class="timeline-card active">
+            <span class="summary-label">Validation</span>
+            <div class="summary-value">${escapeHtml(validation)}</div>
+            <div class="timeline-status">Planner: ${escapeHtml(planner)}</div>
+          </div>
+          <div class="timeline-card ${step?.result?.status === 'failure' ? 'failed' : 'active'}">
+            <span class="summary-label">Execution</span>
+            <div class="summary-value">${escapeHtml(execution)}</div>
+            <div class="timeline-status">Browser: ${escapeHtml(browserLabel(run.browser))}</div>
+          </div>
+          <div class="timeline-card ${hasError ? 'failed' : 'active'}">
+            <span class="summary-label">Error</span>
+            <div class="summary-value">${hasError ? escapeHtml(errorSummary(run, step)) : 'None'}</div>
+            <div class="timeline-status">Evidence preserved</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderRunDetail() {
+      const run = state.selectedRun;
+      if (!run) {
+        renderWelcome();
+        return;
+      }
+
+      const steps = Array.isArray(run.result?.steps) ? run.result.steps : [];
+      const failedIndex = steps.findIndex((step) => step.result?.status === 'failure' || step.validation?.status === 'failure');
+      if (state.selectedStepIndex === null) {
+        state.selectedStepIndex = failedIndex >= 0 ? failedIndex : Math.max(steps.length - 1, 0);
+      }
+      const step = steps[state.selectedStepIndex] || null;
+      const evidence = Array.isArray(run.result?.evidence) ? run.result.evidence : [];
+
+      document.getElementById('result-content').innerHTML = `
+        <div class="split-header">
+          <div>
+            <h2 style="margin-bottom: 6px;">${escapeHtml(run.testName)}</h2>
+            <p class="muted">Run ${escapeHtml(run.id)}</p>
+          </div>
+          <div class="detail-actions" style="margin-top: 0;">
+            <span class="status-pill ${statusClass(run.status)}">${statusLabel(run.status)}</span>
+            <button class="secondary-button" type="button" onclick="setSelectedTest('${run.testId}')">Back to Test</button>
+          </div>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-card"><span class="summary-label">Planner</span><div class="summary-value">${plannerLabel(run.planner)}</div></div>
+          <div class="summary-card"><span class="summary-label">Browser</span><div class="summary-value">${browserLabel(run.browser)}</div></div>
+          <div class="summary-card"><span class="summary-label">Duration</span><div class="summary-value">${formatDuration(run.durationMs)}</div></div>
+          <div class="summary-card"><span class="summary-label">Evidence</span><div class="summary-value"><code>${escapeHtml(run.evidence || '(none)')}</code></div></div>
+        </div>
+
+        <div class="section">
+          <div class="section-header"><h3 class="section-title">Runtime Truth</h3></div>
+          ${step ? renderTimeline(run, step) : '<div class="empty-state"><h3>No step data</h3></div>'}
+        </div>
+
+        <div class="section">
+          <div class="section-header"><h3 class="section-title">Execution Steps</h3></div>
+          <div class="step-list">
+            ${steps.map((item, index) => `
+              <button class="step-button ${index === state.selectedStepIndex ? 'active' : ''}" type="button" onclick="selectRunStep(${index})">
+                <div class="status-row">
+                  <div class="card-title">${statusIcon(item.result?.status === 'failure' || item.validation?.status === 'failure' ? 'failed' : 'passed')} Step ${item.index} — ${escapeHtml(stepTitle(item))}</div>
+                  <span class="status-pill ${item.result?.status === 'failure' || item.validation?.status === 'failure' ? 'failed' : 'passed'}">${item.result?.status === 'failure' || item.validation?.status === 'failure' ? 'failed' : 'passed'}</span>
+                </div>
+                <div class="card-meta">
+                  <div>${escapeHtml(stepAction(item))}</div>
+                </div>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+
+        ${step ? `
+          <div class="section">
+            <div class="section-header"><h3 class="section-title">Step Evidence</h3></div>
+            <div class="step-detail-grid">
+              <div class="step-detail-card wide">
+                <span class="summary-label">Observation</span>
+                <div class="summary-value">${escapeHtml(step.observation?.url || 'No URL captured')}</div>
+                <div class="small-text">${step.observation?.elements?.length ?? 0} visible elements · ${escapeHtml(step.observation?.title || 'Untitled page')}</div>
+              </div>
+              <div class="arrow">↓</div>
+              <div class="step-detail-card wide">
+                <span class="summary-label">Action</span>
+                <div class="summary-value">${escapeHtml(stepAction(step))}</div>
+              </div>
+              <div class="arrow">↓</div>
+              <div class="step-detail-card wide">
+                <span class="summary-label">Validation</span>
+                <div class="summary-value">${escapeHtml(step.validation?.status || 'unknown')}</div>
+                <div class="small-text mono">${escapeHtml(step.validation?.error || 'Action accepted by policy')}</div>
+              </div>
+              <div class="arrow">↓</div>
+              <div class="step-detail-card wide">
+                <span class="summary-label">Execution</span>
+                <div class="summary-value">${escapeHtml(step.result?.status || 'unknown')}</div>
+                <div class="small-text mono">${escapeHtml(step.result?.output || 'No additional output')}</div>
+              </div>
+              <div class="arrow">↓</div>
+              <div class="step-detail-card wide">
+                <span class="summary-label">Error</span>
+                <div class="summary-value mono">${escapeHtml(errorSummary(run, step))}</div>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="section">
+          <div class="section-header"><h3 class="section-title">Evidence</h3></div>
+          <div class="suite-tests">
+            ${evidence.length ? evidence.map((item) => `
+              <div class="evidence-card">
+                <div class="status-row">
+                  <div class="card-title">${escapeHtml(item.assertion || item.type)}</div>
+                  <span class="status-pill ${statusClass(item.result)}">${statusLabel(item.result)}</span>
+                </div>
+                <div class="small-text mono">${escapeHtml(item.detail || '')}</div>
+              </div>
+            `).join('') : '<div class="empty-state"><h3>No evidence entries</h3></div>'}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderResult() {
+      if (state.currentView === 'test-running') {
+        renderRunningTest();
+        return;
+      }
+      if (state.currentView === 'suite-running') {
+        renderSuiteRunning();
+        return;
+      }
+      if (state.currentView === 'run') {
+        renderRunDetail();
+        return;
+      }
+      if (state.currentView === 'suite') {
+        renderSuiteDetail();
+        return;
+      }
+      if (state.currentView === 'test') {
+        renderTestDetail();
+        return;
+      }
+      renderWelcome();
+    }
+
+    function render() {
+      renderTests();
+      renderSuiteRuns();
+      renderResult();
+    }
+
+    async function loadTests() {
+      const response = await fetch('/api/tests');
+      state.tests = await response.json();
+      if (state.selectedTestId && !state.tests.find((test) => test.id === state.selectedTestId)) {
+        state.selectedTestId = null;
+        if (state.currentView === 'test') state.currentView = 'welcome';
+      }
+    }
+
+    async function loadSuiteRuns() {
+      const response = await fetch('/api/suite-runs');
+      state.suiteRuns = await response.json();
+      if (state.selectedSuiteRun) {
+        state.selectedSuiteRun = state.suiteRuns.find((run) => run.id === state.selectedSuiteRun.id) || state.selectedSuiteRun;
+      }
+    }
+
+    async function refresh() {
+      try {
+        await Promise.all([loadTests(), loadSuiteRuns()]);
+      } catch (error) {
+        document.getElementById('result-content').innerHTML = '<div class="empty-state"><h3>Unable to load workspace</h3><p>' + escapeHtml(String(error)) + '</p></div>';
+      }
+      render();
+    }
+
+    function openNewTestForm() {
+      state.editTestId = null;
+      document.getElementById('new-test-mode').textContent = 'Create Test';
+      document.getElementById('new-test-title').textContent = 'New Test';
+      document.getElementById('new-test-description').textContent = 'Create a new AI Playwright workspace test.';
+      document.getElementById('new-test-name').value = '';
+      document.getElementById('new-test-url').value = 'http://127.0.0.1:3000';
+      document.getElementById('new-test-task').value = '';
+      document.getElementById('new-test-modal').classList.remove('hidden');
+      document.getElementById('new-test-name').focus();
+    }
+
+    function openEditTestForm() {
+      const test = selectedTest();
+      if (!test) return;
+      state.editTestId = test.id;
+      document.getElementById('new-test-mode').textContent = 'Edit Test';
+      document.getElementById('new-test-title').textContent = test.name;
+      document.getElementById('new-test-description').textContent = 'Update the selected workspace test.';
+      document.getElementById('new-test-name').value = test.name;
+      document.getElementById('new-test-url').value = test.url || '';
+      document.getElementById('new-test-task').value = test.task;
+      document.getElementById('new-test-modal').classList.remove('hidden');
+      document.getElementById('new-test-name').focus();
+    }
+
+    function closeNewTestForm() {
+      document.getElementById('new-test-modal').classList.add('hidden');
+      state.editTestId = null;
+    }
+
+    async function submitNewTestForm() {
+      const name = document.getElementById('new-test-name').value.trim();
+      const url = document.getElementById('new-test-url').value.trim();
+      const task = document.getElementById('new-test-task').value.trim();
+      if (!name || !task) {
+        alert('Name and task are required.');
+        return;
+      }
+
+      const testId = state.editTestId;
+      const endpoint = testId ? '/api/tests/' + testId : '/api/tests';
+      const method = testId ? 'PUT' : 'POST';
+
+      try {
+        const response = await fetch(endpoint, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, task, url: url || undefined }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          alert('Error saving test: ' + payload.error);
+          return;
+        }
+        closeNewTestForm();
+        await refresh();
+        setSelectedTest(payload.id || testId);
+      } catch (error) {
+        alert('Error saving test: ' + error);
+      }
+    }
+
+    async function deleteTestConfirm() {
+      const test = selectedTest();
+      if (!test) return;
+      if (!confirm('Delete test "' + test.name + '"? This cannot be undone.')) return;
+      const response = await fetch('/api/tests/' + test.id, { method: 'DELETE' });
+      if (!response.ok) {
+        const payload = await response.json();
+        alert('Error deleting test: ' + payload.error);
+        return;
+      }
+      state.selectedTestId = null;
+      state.currentView = 'welcome';
+      await refresh();
+    }
+
+    async function selectSuiteRun(suiteRunId) {
+      state.selectedSuiteRun = state.suiteRuns.find((run) => run.id === suiteRunId) || null;
+      state.selectedRun = null;
+      state.selectedTestId = null;
+      state.selectedStepIndex = null;
+      state.currentView = 'suite';
+      render();
+    }
+
+    function selectRunStep(index) {
+      state.selectedStepIndex = index;
+      renderRunDetail();
+    }
+
+    async function viewRun(runId) {
+      const response = await fetch('/api/runs/' + runId);
+      state.selectedRun = await response.json();
+      if (!response.ok) {
+        alert('Error loading run: ' + state.selectedRun.error);
+        return;
+      }
+      state.selectedTestId = state.selectedRun.testId;
+      state.selectedSuiteRun = null;
+      state.selectedStepIndex = null;
+      state.currentView = 'run';
+      render();
+    }
+
+    async function runTest() {
+      const test = selectedTest();
+      if (!test || state.isRunning) return;
+      const startedAt = Date.now();
+      state.isRunning = true;
+      state.runningTest = {
+        id: test.id,
+        name: test.name,
+        planner: test.planner,
+        browser: test.browser,
+      };
+      state.currentView = 'test-running';
+      render();
+
+      try {
+        const response = await fetch('/api/tests/' + test.id + '/run', { method: 'POST' });
+        const payload = await response.json();
+        if (!response.ok) {
+          alert('Error running test: ' + payload.error);
+          return;
+        }
+        const remaining = 350 - (Date.now() - startedAt);
+        if (remaining > 0) {
+          await new Promise((resolve) => setTimeout(resolve, remaining));
+        }
+        await refresh();
+        await viewRun(payload.runId);
+      } catch (error) {
+        alert('Error running test: ' + error);
+      } finally {
+        state.isRunning = false;
+        state.runningTest = null;
+        if (state.currentView === 'test-running') {
+          state.currentView = 'test';
+        }
+        render();
+      }
+    }
+
+    async function runSuite() {
+      if (state.isRunning || state.tests.length === 0) return;
+      const startedAt = Date.now();
+      state.isRunning = true;
+      state.runningSuite = {
+        tests: state.tests.map((test) => ({
+          name: test.name,
+          status: test.status,
+          planner: test.planner,
+          browser: test.browser,
+        })),
+      };
+      state.selectedTestId = null;
+      state.selectedRun = null;
+      state.selectedSuiteRun = null;
+      state.selectedStepIndex = null;
+      state.currentView = 'suite-running';
+      render();
+
+      try {
+        const response = await fetch('/api/suite/run', { method: 'POST' });
+        const payload = await response.json();
+        if (!response.ok) {
+          alert('Error running suite: ' + payload.error);
+          return;
+        }
+        const remaining = 350 - (Date.now() - startedAt);
+        if (remaining > 0) {
+          await new Promise((resolve) => setTimeout(resolve, remaining));
+        }
+        await refresh();
+        state.selectedSuiteRun = payload;
+        state.currentView = 'suite';
+        render();
+      } catch (error) {
+        alert('Error running suite: ' + error);
+      } finally {
+        state.isRunning = false;
+        state.runningSuite = null;
+        render();
+      }
+    }
+
+    document.getElementById('new-test-modal').addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) {
+        closeNewTestForm();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeNewTestForm();
+      }
+    });
+
+    refresh();
+    setInterval(() => {
+      if (!state.isRunning) {
+        refresh();
+      }
+    }, 3000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+{
+  "id": "suite-1789340324270-y4ajzlr",
+  "startedAt": 1789340324270,
+  "status": "passed",
+  "tests": [
+    {
+      "testId": "checkout",
+      "testName": "Checkout",
+      "runId": "run-1789340324271-82dw93i",
+      "status": "passed",
+      "durationMs": 470,
+      "planner": "deterministic",
+      "browser": "obscura"
+    },
+    {
+      "testId": "home",
+      "testName": "Home",
+      "runId": "run-1789340324742-edxsvge",
+      "status": "passed",
+      "durationMs": 267,
+      "planner": "deterministic",
+      "browser": "obscura"
+    }
+  ],
+  "evidence": "/home/runner/work/ai-playwright/ai-playwright/.cx-workspace-1789340290291-t41cp7jj2hm/artifacts/suite-1789340324270-y4ajzlr",
+  "finishedAt": 1789340325009,
+  "durationMs": 739
+}

@@ -117,7 +117,7 @@ export function diagnoseFailure(taskResult: any): FailureDiagnosis | null {
       step: failedStep.index,
       action: {
         type: actionType,
-        description: describeAction(action),
+        description: describeAction(action, observation),
       },
       observation: observationId
         ? {
@@ -156,20 +156,28 @@ export function diagnoseFailure(taskResult: any): FailureDiagnosis | null {
   };
 }
 
-function describeAction(action: any): string {
+function targetName(action: any, observation: any): string | undefined {
+  const elementId = action?.target?.elementId;
+  if (!elementId || !Array.isArray(observation?.elements)) return undefined;
+  const matched = observation.elements.find((element: any) => element?.id === elementId);
+  return typeof matched?.name === "string" && matched.name.length > 0 ? matched.name : undefined;
+}
+
+function describeAction(action: any, observation?: any): string {
   if (!action) return "unknown action";
+  const name = targetName(action, observation);
 
   switch (action.type) {
     case "goto":
       return `Navigate to ${action.url}`;
     case "click":
-      return `Click element`;
+      return name ? `Click "${name}"` : `Click element`;
     case "fill":
-      return `Fill text: "${action.value}"`;
+      return name ? `Fill "${name}" with "${action.value}"` : `Fill text: "${action.value}"`;
     case "press":
       return `Press key: ${action.key}`;
     case "select":
-      return `Select option: ${action.value}`;
+      return name ? `Select "${name}" → "${action.value}"` : `Select option: ${action.value}`;
     case "assert":
       return `Assert: ${action.assertion?.type || "condition"}`;
     default:
@@ -180,6 +188,7 @@ function describeAction(action: any): string {
 function categorizeExecutionError(error?: string): string {
   if (!error) return "unknown";
   if (error.includes("not found") || error.includes("not present")) return "target_not_found";
+  if (error.includes("intercepts pointer events")) return "target_blocked";
   if (error.includes("timeout")) return "timeout";
   if (error.includes("navigation")) return "navigation_error";
   if (error.includes("connection")) return "connection_error";

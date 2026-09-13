@@ -1,0 +1,131 @@
+{
+  "status": "passed",
+  "steps": [
+    {
+      "index": 1,
+      "observation": {
+        "id": "obs-1",
+        "generation": 1,
+        "url": "about:blank",
+        "title": "",
+        "text": "",
+        "elements": []
+      },
+      "action": {
+        "type": "goto",
+        "url": "http://127.0.0.1:44995/home",
+        "reason": "Navigate to target application",
+        "confidence": 0.95,
+        "risk": "write"
+      },
+      "validation": {
+        "status": "success"
+      },
+      "result": {
+        "status": "success"
+      },
+      "timestamp": 1789340324889,
+      "telemetry": {
+        "observationMs": 2,
+        "inferenceMs": 0,
+        "validationMs": 1,
+        "executionMs": 10,
+        "inputTokens": 55,
+        "outputTokens": 32
+      },
+      "planner": {
+        "provider": "deterministic"
+      }
+    },
+    {
+      "index": 2,
+      "observation": {
+        "id": "obs-1",
+        "generation": 1,
+        "url": "http://127.0.0.1:44995/home",
+        "title": "Home",
+        "text": "Home\n\nSuccess: checkout demo home page loaded.",
+        "elements": []
+      },
+      "action": {
+        "type": "assert",
+        "assertion": {
+          "type": "textVisible",
+          "text": "Success"
+        },
+        "reason": "Verify success state",
+        "confidence": 0.9,
+        "risk": "read"
+      },
+      "validation": {
+        "status": "success"
+      },
+      "result": {
+        "status": "success",
+        "output": "Success"
+      },
+      "timestamp": 1789340324929,
+      "telemetry": {
+        "observationMs": 2,
+        "inferenceMs": 0,
+        "validationMs": 0,
+        "executionMs": 2,
+        "inputTokens": 195,
+        "outputTokens": 33
+      },
+      "planner": {
+        "provider": "deterministic"
+      }
+    },
+    {
+      "index": 3,
+      "observation": {
+        "id": "obs-2",
+        "generation": 2,
+        "url": "http://127.0.0.1:44995/home",
+        "title": "Home",
+        "text": "Home\n\nSuccess: checkout demo home page loaded.",
+        "elements": []
+      },
+      "action": {
+        "type": "finish",
+        "result": "success",
+        "reason": "Checkout verification complete",
+        "confidence": 0.95,
+        "risk": "read"
+      },
+      "validation": {
+        "status": "success"
+      },
+      "result": {
+        "status": "success"
+      },
+      "timestamp": 1789340324958,
+      "telemetry": {
+        "observationMs": 2,
+        "inferenceMs": 0,
+        "validationMs": 0,
+        "executionMs": 0,
+        "inputTokens": 341,
+        "outputTokens": 28
+      },
+      "planner": {
+        "provider": "deterministic"
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "type": "assertion",
+      "assertion": "text 'Success' is visible",
+      "result": "passed"
+    },
+    {
+      "type": "limit",
+      "assertion": "Task completed within step budget",
+      "result": "passed"
+    }
+  ],
+  "artifactsPath": "/home/runner/work/ai-playwright/ai-playwright/.cx-workspace-1789340290291-t41cp7jj2hm/artifacts/run-1789340324742-edxsvge/task-001",
+  "durationMs": 168
+}
