@@ -525,17 +525,91 @@ PR #8 can proceed with CLI implementation. No kernel changes needed. No architec
 
 ## Part 6: What PR #8 Builds
 
-Based on all gates passing:
+Based on all gates passing and contract audit confirming feasibility:
 
 **PR #8: CLI Implementation**
-- `packages/cli/index.ts` — Full CLI entry point
-- `packages/cli/adapters/remote-planner.ts` — LLM API wrapper
-- `packages/cli/adapters/playwright-browser.ts` — Playwright executor
+- `packages/cli/index.ts` — Full CLI entry point (based on index-sketch.ts)
+- `packages/cli/adapters/remote-planner.ts` — External LLM wrapper (OpenAI, Anthropic, etc.)
+  - Implements `Planner` interface from actual PR #5 kernel
+  - Wraps `Planner.next(input)` to call external LLM API
+  - Returns `BrowserAction`
 - `packages/cli/browser-lifecycle.ts` — Browser spawn/shutdown
+  - Manages Playwright browser lifetime
+  - Provides `BrowserRuntime` interface or similar
 - `packages/cli/evidence-reporter.ts` — JSON + human-readable output
+  - Formats TaskResult for CI/CD
+  - CLI summary output
 - Tests: End-to-end CLI tests with mock LLM + Playwright
 
+**Important:** Uses actual PR #5 kernel interfaces as-is
+- No kernel changes needed
+- No wrapper layer for planner/executor (they work directly with Playwright)
+- TaskResult format unchanged
+
 **Prerequisite:** PR #6 must be merged (browser-local feasibility proved).
+
+---
+
+## Part 7: Browser-Local (PR #9 or PR #9-alt)
+
+**Contract audit finding:** The actual PR #5 kernel has interface-level Playwright dependencies, even though the semantic core is portable.
+
+**Solution:** Adapter wrapper pattern for browser-local
+
+```typescript
+// Browser-local needs wrapper adapters to use the same kernel
+// BUT: These adapters wrap the kernel's semantic core, not fork it
+
+interface BrowserLocalPlannerAdapter implements Planner {
+  next(input: PlannerInput): Promise<BrowserAction> {
+    // Use WebLLM (or mock) to generate action
+    // Return BrowserAction same as any other Planner
+  }
+}
+
+interface BrowserLocalBrowserExecutor implements BrowserExecutor {
+  execute(page: Page, action: BrowserAction, obs: Observation): Promise<ActionResult> {
+    // Execute on actual DOM (not Playwright)
+    // But page parameter is unused (only in Node.js, not browser anyway)
+    // Return ActionResult same as PlaywrightExecutor
+  }
+}
+```
+
+**Key insight:** Both modes implement the *same interfaces*, but CLI uses Playwright implementations while browser-local would use DOM/WebLLM implementations. The kernel doesn't care which implementation; it only knows the interface.
+
+This validates the architecture: **"same kernel, different adapters"** is achievable, but the adapter implementations differ by target environment.
+
+---
+
+## Part 8: Architecture Refined
+
+Original architecture was correct; contract audit refines the implementation story:
+
+```
+                 AI Playwright
+                      │
+                ┌─────▼─────┐
+                │ aipw-core │
+                └─────┬─────┘
+                      │
+             ┌────────┴────────┐
+             │                 │
+        Developer CLI      Browser Web App
+        PRIMARY            SECONDARY
+             │
+    ┌────────┴────────┐
+    │                 │
+ [Planner]        [BrowserExecutor]
+    │                 │
+    ├─ RemoteLLM      ├─ PlaywrightBrowser  (PR #8 CLI)
+    │  (PR #8)        │  (PR #8)
+    │
+    ├─ WebLLM         ├─ DOMBrowser         (PR #9 browser-local)
+    │  (PR #9)        │  (PR #9)
+```
+
+**Both modes use same kernel; adapters differ by target runtime.**
 
 ---
 
