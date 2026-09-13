@@ -20,6 +20,7 @@ export type TestRun = {
 };
 
 export type RunMetadata = {
+  id: string;
   testId: string;
   testName: string;
   url: string;

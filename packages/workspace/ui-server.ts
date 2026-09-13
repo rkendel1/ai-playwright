@@ -659,7 +659,7 @@ function getUIHTML(): string {
         section.innerHTML = \`
           <div class="section-title">Run History</div>
           \${runs.slice(0, 5).map((run, i) => \`
-            <div class="info-row" style="cursor: pointer;" onclick="viewRun('\${run.testId}', '\${run.startedAt}')">
+            <div class="info-row" style="cursor: pointer;" onclick="viewRun('\${run.id}')">
               <span class="info-label">\${i === 0 ? 'Latest' : 'Run ' + (i + 1)}</span>
               <span class="info-value">\${run.status === 'passed' ? '✅' : run.status === 'failed' ? '❌' : '⊘'} \${new Date(run.finishedAt).toLocaleString()}</span>
             </div>
@@ -694,7 +694,7 @@ function getUIHTML(): string {
 
         <div class="section">
           \${selectedSuiteRun.tests.map(test => \`
-            <div class="suite-test" onclick="selectTest('\${test.testId}')">
+            <div class="suite-test" onclick="viewRunById('\${test.runId}')">
               <div class="test-name">\${statusIcon(test.status)} \${test.testName}</div>
               <div class="test-status">
                 \${test.status.toUpperCase()} · Planner: \${plannerLabel(test.planner)} · Browser: \${test.browser === 'obscura' ? 'Obscura' : test.browser}
@@ -715,15 +715,61 @@ function getUIHTML(): string {
 
     function renderRunDetail() {
       if (!selectedRun) return;
-      // This would render the detailed run view - for now, go back to test view
-      currentView = 'test';
-      renderResult();
+
+      const statusEmoji = { passed: '✅', failed: '❌', blocked: '⊘', running: '⏳' }[selectedRun.status] || '◯';
+      const durationSec = selectedRun.durationMs ? (selectedRun.durationMs / 1000).toFixed(1) : '?';
+      const f = selectedRun.failure;
+      const failureHtml = f ? \`
+        <div class="section">
+          <div class="section-title">Failure Details</div>
+          <div class="info-row"><span class="info-label">Phase</span><span class="info-value">\${f.phase}</span></div>
+          <div class="info-row"><span class="info-label">Category</span><span class="info-value">\${f.category}</span></div>
+          \${f.step !== undefined ? \`<div class="info-row"><span class="info-label">Step</span><span class="info-value">\${f.step}</span></div>\` : ''}
+          \${f.action ? \`<div class="info-row"><span class="info-label">Action</span><span class="info-value">\${f.action.description || f.action.type}</span></div>\` : ''}
+          <div class="info-row"><span class="info-label">Error</span><span class="info-value error">\${f.message}</span></div>
+        </div>
+      \` : '';
+
+      document.getElementById('result-content').innerHTML = \`
+        <div class="result-header">
+          <div>
+            <div class="test-name">\${selectedRun.testName}</div>
+            <div class="test-status">Run: \${selectedRun.id}</div>
+          </div>
+          <button class="run-button" style="background: #666;" onclick="selectTest('\${selectedRun.testId}')">Back to Test</button>
+        </div>
+        <div class="section">
+          <div class="section-title">Run Details</div>
+          <div class="info-row"><span class="info-label">Status</span><span class="info-value">\${statusEmoji} \${selectedRun.status.toUpperCase()}</span></div>
+          <div class="info-row"><span class="info-label">Duration</span><span class="info-value">\${durationSec}s</span></div>
+          <div class="info-row"><span class="info-label">Planner</span><span class="info-value">\${plannerLabel(selectedRun.planner)}</span></div>
+          <div class="info-row"><span class="info-label">Browser</span><span class="info-value">\${selectedRun.browser === 'obscura' ? 'Obscura' : selectedRun.browser}</span></div>
+          <div class="info-row"><span class="info-label">Evidence</span><span class="info-value">\${selectedRun.evidence || '(none)'}</span></div>
+        </div>
+        \${failureHtml}
+      \`;
     }
 
-    function viewRun(testId, timestamp) {
-      // For now, just show the test view - run details are shown in failure section
-      currentView = 'test';
-      renderResult();
+    async function viewRunById(runId) {
+      try {
+        const response = await fetch(\`/api/runs/\${runId}\`);
+        selectedRun = await response.json();
+        if (!response.ok) {
+          alert('Error loading run: ' + selectedRun.error);
+          return;
+        }
+        selectedTest = tests.find(test => test.id === selectedRun.testId) || null;
+        selectedSuiteRun = null;
+        currentView = 'run';
+        renderTests();
+        renderResult();
+      } catch (error) {
+        alert('Error loading run: ' + error);
+      }
+    }
+
+    function viewRun(runId) {
+      viewRunById(runId);
     }
 
     async function runTest() {

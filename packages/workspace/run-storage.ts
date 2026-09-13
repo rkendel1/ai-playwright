@@ -40,6 +40,7 @@ export function createRun(
   const now = Date.now();
 
   const metadata: RunMetadata = {
+    id: runId,
     testId,
     testName,
     url,
