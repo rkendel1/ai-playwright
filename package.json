@@ -1,0 +1,32 @@
+{
+  "name": "ai-playwright",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "dev": "tsx packages/cli/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://localhost:26831/rkendel1/ai-playwright"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "playwright": "^1.63.0",
+    "zod": "^4.6.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  },
+  "type": "module",
+  "bin": {
+    "aipw": "packages/cli/index.ts"
+  }
+}
