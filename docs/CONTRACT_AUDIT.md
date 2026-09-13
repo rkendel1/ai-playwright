@@ -395,25 +395,27 @@ if (action.target.observationId !== observation.id) {
 
 ## Contract Audit Verdict
 
-### Can PR #7 CLI Scenario Work? ✅ YES
+### CLI Execution Architecture Compatibility ✅ 
 
-The actual PR #5 kernel **is sufficient for the CLI scenario**, despite the gaps.
+The CLI execution architecture **is compatible with the actual PR #5 kernel contracts**, with no kernel changes identified.
 
-**Why the gaps don't block CLI:**
+**Why the identified gaps are not blockers:**
 1. ✅ CLI has Playwright.Page available (not browser-local)
 2. ✅ Observation function works with Playwright
 3. ✅ Planner returns BrowserAction (metadata tracking is separate concern)
 4. ✅ Success/failure is enough for MVP (rejection vs failure not critical yet)
 5. ✅ Policy enforcement works at validation layer
 
-### What's Blocked?
+**Note:** Compatibility validation is architectural; real CLI implementation in PR #8 will provide concrete proof.
 
-**Browser-local mode sharing the real kernel is partially blocked:**
-- Executor interface requires Playwright.Page (can't use in browser)
-- Observation function requires Playwright (can't use in browser)
-- Would need wrapper interfaces or different executor paths for browser-local
+### What Requires Adaptation?
 
-**This is important discovery:** The actual PR #5 kernel, while portable at the *semantic* level (no host assumptions in state machine), has *interface* assumptions about Playwright being present.
+**Browser-local mode requires runtime-specific adapters:**
+- Executor interface requires Playwright.Page (unavailable in browser)
+- Observation function requires Playwright (unavailable in browser)
+- Adaptation strategy: Implement `Planner` and `BrowserExecutor` interfaces using browser-available APIs (WebLLM, DOM)
+
+**This is important discovery:** The actual PR #5 kernel, while portable at the *semantic* level (state machine, validation logic have no host assumptions), has *interface* dependencies on Playwright. This is correct: the adapter boundary is exactly where runtime-specific concerns belong. The kernel should not be generalized further.
 
 ---
 
@@ -439,37 +441,34 @@ The actual PR #5 kernel **is sufficient for the CLI scenario**, despite the gaps
 
 ### For Browser-Local Mode (Secondary)
 
-**Critical finding:** The actual kernel interfaces are **not fully portable** to browser execution.
+**Finding:** Browser-local requires runtime-specific adapter implementations, not kernel changes.
 
-Options:
-1. **Create wrapper adapters** (still use actual kernel)
-   - Implement browser-local Planner wrapper
-   - Implement browser-local BrowserExecutor wrapper
-   - Adapters translate between browser environment and kernel interfaces
+**Implementation approach (defer to PR #9):**
+- Implement browser-local `Planner` (wraps WebLLM or mock)
+- Implement browser-local `BrowserExecutor` (uses DOM APIs, no Playwright)
+- Both adapters comply with existing kernel interfaces
+- Share kernel semantic layer (state machine, validation) with CLI
+- Do not add generic abstraction to kernel; keep it Playwright-aware at interface level
 
-2. **Create separate browser-local entry point** (uses actual kernel, different adapters)
-   - `apps/web/src/main.ts` doesn't use core kernel's executor
-   - Brings its own observation and execution logic
-   - Still uses core kernel's semantic layer (state machine, policy)
-
-3. **Defer browser-local to PR #9**
-   - PR #8 builds CLI with real kernel
-   - PR #9 revisits browser-local with wrapper pattern
-   - Both use same kernel semantic core
+**Why this is correct:**
+- Runtime concerns (Playwright.Page vs browser DOM) belong in adapters
+- Kernel semantic core remains clean and focused
+- No premature generalization
 
 ### Recommended Path
 
-**PR #8:** Build CLI using actual PR #5 kernel as-is
-- No kernel changes needed
-- All interfaces align for Node.js + Playwright
-- TaskResult is sufficient for evidence
-- Planner metadata tracking works with current telemetry
+**PR #8:** Build CLI endpoint using actual PR #5 kernel as-is
+- No kernel changes required
+- Implement RemotePlannerAdapter wrapping external LLM
+- Use PlaywrightBrowserExecutor directly from kernel
+- TaskResult is sufficient for evidence output
+- Acceptance criterion: Real CLI dogfood with canonical scenario
 
-**PR #9 or PR #9-alt:** Revisit browser-local with adapter wrappers
-- Create browser-local Planner wrapper
-- Create browser-local BrowserExecutor wrapper
+**PR #9 (if still warranted after #8):** Browser-local with adapter implementations
+- Implement browser-local Planner (WebLLM or mock)
+- Implement browser-local BrowserExecutor (DOM)
+- Both adapt to existing kernel interfaces; no kernel changes
 - Share kernel semantic core with CLI
-- Document why interfaces differ (Playwright.Page dependency)
 
 ---
 
