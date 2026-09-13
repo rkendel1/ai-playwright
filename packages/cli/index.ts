@@ -5,6 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { aiPlaywright, type PlannerMode } from "../core/index.js";
 import { initWorkspace, runTestCommand, listTestsCommand, startUICommand } from "./workspace-commands.js";
+import { CliPlannerAdapter } from "./adapters/CliPlannerAdapter.js";
 
 /**
  * AI Playwright CLI — PR #9 Workspace
@@ -127,7 +128,7 @@ async function oneShotMode(options: ReturnType<typeof parseArgs>) {
     const browser = await aiPlaywright({
       browser: "obscura",
       headless: !headed,
-      planner,
+      planner: planner === "deterministic" || planner === "mock" ? new CliPlannerAdapter() : planner,
       model: planner === "webllm" && model ? { provider: "webllm", model } : undefined,
       url,
       artifactsDir,

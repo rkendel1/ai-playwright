@@ -39,6 +39,8 @@ describe("CLI Integration", () => {
         "packages/cli/index.ts",
         "--url",
         BASE_URL,
+        "--planner",
+        "deterministic",
         "--artifacts",
         RESULTS_DIR,
         "test checkout",
