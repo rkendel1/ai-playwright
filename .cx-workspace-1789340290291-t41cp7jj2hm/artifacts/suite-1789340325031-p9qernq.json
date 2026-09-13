@@ -1,0 +1,37 @@
+{
+  "id": "suite-1789340325031-p9qernq",
+  "startedAt": 1789340325031,
+  "status": "failed",
+  "tests": [
+    {
+      "testId": "checkout",
+      "testName": "Checkout",
+      "runId": "run-1789340325031-wtg7emz",
+      "status": "passed",
+      "durationMs": 476,
+      "planner": "deterministic",
+      "browser": "obscura"
+    },
+    {
+      "testId": "home",
+      "testName": "Home",
+      "runId": "run-1789340325507-kqrjq3z",
+      "status": "passed",
+      "durationMs": 250,
+      "planner": "deterministic",
+      "browser": "obscura"
+    },
+    {
+      "testId": "invalid-payment",
+      "testName": "Invalid Payment",
+      "runId": "run-1789340325757-hbhdria",
+      "status": "failed",
+      "durationMs": 30356,
+      "planner": "deterministic",
+      "browser": "obscura"
+    }
+  ],
+  "evidence": "/home/runner/work/ai-playwright/ai-playwright/.cx-workspace-1789340290291-t41cp7jj2hm/artifacts/suite-1789340325031-p9qernq",
+  "finishedAt": 1789340356113,
+  "durationMs": 31082
+}

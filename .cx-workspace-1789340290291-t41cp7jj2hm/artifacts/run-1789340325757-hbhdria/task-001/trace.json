@@ -1,0 +1,221 @@
+{
+  "status": "failed",
+  "steps": [
+    {
+      "index": 1,
+      "observation": {
+        "id": "obs-1",
+        "generation": 1,
+        "url": "about:blank",
+        "title": "",
+        "text": "",
+        "elements": []
+      },
+      "action": {
+        "type": "goto",
+        "url": "http://127.0.0.1:44995/invalid-payment",
+        "reason": "Navigate to target application",
+        "confidence": 0.95,
+        "risk": "write"
+      },
+      "validation": {
+        "status": "success"
+      },
+      "result": {
+        "status": "success"
+      },
+      "timestamp": 1789340325905,
+      "telemetry": {
+        "observationMs": 3,
+        "inferenceMs": 0,
+        "validationMs": 0,
+        "executionMs": 11,
+        "inputTokens": 57,
+        "outputTokens": 35
+      },
+      "planner": {
+        "provider": "deterministic"
+      }
+    },
+    {
+      "index": 2,
+      "observation": {
+        "id": "obs-1",
+        "generation": 1,
+        "url": "http://127.0.0.1:44995/invalid-payment",
+        "title": "Invalid Payment",
+        "text": "Invalid Payment\n\nThis journey intentionally fails after planning the payment submission.\n\nProceed to Checkout",
+        "elements": [
+          {
+            "id": "e1",
+            "role": "button",
+            "name": "Proceed to Checkout",
+            "value": "",
+            "state": {
+              "visible": true,
+              "enabled": true
+            }
+          }
+        ]
+      },
+      "action": {
+        "type": "click",
+        "target": {
+          "observationId": "obs-1",
+          "elementId": "e1"
+        },
+        "reason": "Click checkout button",
+        "confidence": 0.9,
+        "risk": "write"
+      },
+      "validation": {
+        "status": "success"
+      },
+      "result": {
+        "status": "success"
+      },
+      "timestamp": 1789340325972,
+      "telemetry": {
+        "observationMs": 3,
+        "inferenceMs": 0,
+        "validationMs": 0,
+        "executionMs": 27,
+        "inputTokens": 248,
+        "outputTokens": 34
+      },
+      "planner": {
+        "provider": "deterministic"
+      }
+    },
+    {
+      "index": 3,
+      "observation": {
+        "id": "obs-1",
+        "generation": 1,
+        "url": "http://127.0.0.1:44995/invalid-payment/checkout",
+        "title": "Invalid Payment Checkout",
+        "text": "Checkout\n\nEnter your email to complete checkout.\n\nEmail Address  Submit payment",
+        "elements": [
+          {
+            "id": "e1",
+            "role": "textbox",
+            "name": "Email Address",
+            "value": "",
+            "state": {
+              "visible": true,
+              "enabled": true,
+              "checked": false
+            }
+          },
+          {
+            "id": "e2",
+            "role": "button",
+            "name": "Submit payment",
+            "value": "",
+            "state": {
+              "visible": true,
+              "enabled": true
+            }
+          }
+        ]
+      },
+      "action": {
+        "type": "fill",
+        "target": {
+          "observationId": "obs-1",
+          "elementId": "e1"
+        },
+        "value": "test@example.com",
+        "reason": "Enter email address",
+        "confidence": 0.85,
+        "risk": "write"
+      },
+      "validation": {
+        "status": "success"
+      },
+      "result": {
+        "status": "success"
+      },
+      "timestamp": 1789340326023,
+      "telemetry": {
+        "observationMs": 3,
+        "inferenceMs": 0,
+        "validationMs": 0,
+        "executionMs": 11,
+        "inputTokens": 464,
+        "outputTokens": 40
+      },
+      "planner": {
+        "provider": "deterministic"
+      }
+    },
+    {
+      "index": 4,
+      "observation": {
+        "id": "obs-2",
+        "generation": 2,
+        "url": "http://127.0.0.1:44995/invalid-payment/checkout",
+        "title": "Invalid Payment Checkout",
+        "text": "Checkout\n\nEnter your email to complete checkout.\n\nEmail Address  Submit payment",
+        "elements": [
+          {
+            "id": "e1",
+            "role": "textbox",
+            "name": "Email Address",
+            "value": "test@example.com",
+            "state": {
+              "visible": true,
+              "enabled": true,
+              "checked": false
+            }
+          },
+          {
+            "id": "e2",
+            "role": "button",
+            "name": "Submit payment",
+            "value": "",
+            "state": {
+              "visible": true,
+              "enabled": true
+            }
+          }
+        ]
+      },
+      "action": {
+        "type": "click",
+        "target": {
+          "observationId": "obs-2",
+          "elementId": "e2"
+        },
+        "reason": "Submit checkout form",
+        "confidence": 0.88,
+        "risk": "write"
+      },
+      "validation": {
+        "status": "success"
+      },
+      "result": {
+        "status": "failure",
+        "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('[data-aipw-id=\\'e2\\']').first()\n    - locator resolved to <button type=\"button\" data-aipw-id=\"e2\" id=\"submit-payment\">Submit payment</button>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <div aria-hidden=\"true\" id=\"submit-blocker\"></div> intercepts pointer events\n    - retrying click action\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <div aria-hidden=\"true\" id=\"submit-blocker\"></div> intercepts pointer events\n    - retrying click action\n      - waiting 100ms\n    58 × waiting for element to be visible, enabled and stable\n       - element is visible, enabled and stable\n       - scrolling into view if needed\n       - done scrolling\n       - <div aria-hidden=\"true\" id=\"submit-blocker\"></div> intercepts pointer events\n     - retrying click action\n       - waiting 500ms\n"
+      },
+      "timestamp": 1789340356068,
+      "telemetry": {
+        "observationMs": 2,
+        "inferenceMs": 0,
+        "validationMs": 0,
+        "executionMs": 30007,
+        "inputTokens": 691,
+        "outputTokens": 34
+      },
+      "planner": {
+        "provider": "deterministic"
+      }
+    }
+  ],
+  "evidence": [],
+  "error": {
+    "reason": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('[data-aipw-id=\\'e2\\']').first()\n    - locator resolved to <button type=\"button\" data-aipw-id=\"e2\" id=\"submit-payment\">Submit payment</button>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <div aria-hidden=\"true\" id=\"submit-blocker\"></div> intercepts pointer events\n    - retrying click action\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <div aria-hidden=\"true\" id=\"submit-blocker\"></div> intercepts pointer events\n    - retrying click action\n      - waiting 100ms\n    58 × waiting for element to be visible, enabled and stable\n       - element is visible, enabled and stable\n       - scrolling into view if needed\n       - done scrolling\n       - <div aria-hidden=\"true\" id=\"submit-blocker\"></div> intercepts pointer events\n     - retrying click action\n       - waiting 500ms\n"
+  },
+  "artifactsPath": "/home/runner/work/ai-playwright/ai-playwright/.cx-workspace-1789340290291-t41cp7jj2hm/artifacts/run-1789340325757-hbhdria/task-001",
+  "durationMs": 30244
+}
