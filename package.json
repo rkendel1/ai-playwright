@@ -7,7 +7,9 @@
     "build": "tsc -p tsconfig.json",
     "build:wasm": "tsc -p tsconfig.wasm.json",
     "test": "vitest run",
-    "dev": "tsx packages/cli/index.ts"
+    "dev": "tsx packages/cli/index.ts",
+    "web:dev": "vite",
+    "web:build": "vite build"
   },
   "repository": {
     "type": "git",

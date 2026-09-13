@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Playwright - Browser Local Feasibility Spike</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .panel {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      grid-column: 1 / -1;
+      font-size: 24px;
+      margin-bottom: 20px;
+      color: #333;
+    }
+
+    h2 {
+      font-size: 18px;
+      margin-bottom: 15px;
+      color: #666;
+      border-bottom: 2px solid #eee;
+      padding-bottom: 10px;
+    }
+
+    /* Fixture Panel */
+    #fixture {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    button {
+      padding: 10px 16px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+
+    input {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    #projects {
+      list-style: none;
+      border: 1px solid #eee;
+      border-radius: 4px;
+      padding: 0;
+      min-height: 100px;
+      overflow-y: auto;
+    }
+
+    #projects li {
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+      background: #f9f9f9;
+    }
+
+    #projects li:last-child {
+      border-bottom: none;
+    }
+
+    #projects li.created {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    /* Trace Panel */
+    #trace {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .trace-item {
+      background: #f9f9f9;
+      border-left: 3px solid #007bff;
+      padding: 12px;
+      border-radius: 2px;
+      font-size: 12px;
+      font-family: "Courier New", monospace;
+    }
+
+    .trace-item.status-pass {
+      border-left-color: #28a745;
+      background: #f0f8f0;
+    }
+
+    .trace-item.status-fail {
+      border-left-color: #dc3545;
+      background: #fef0f0;
+    }
+
+    .trace-item.status-blocked {
+      border-left-color: #ffc107;
+      background: #fffbf0;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-weight: bold;
+      font-size: 11px;
+      margin-right: 8px;
+    }
+
+    .status-badge.pass {
+      background: #28a745;
+      color: white;
+    }
+
+    .status-badge.fail {
+      background: #dc3545;
+      color: white;
+    }
+
+    .status-badge.blocked {
+      background: #ffc107;
+      color: #333;
+    }
+
+    .status-badge.pending {
+      background: #17a2b8;
+      color: white;
+    }
+
+    /* Control Panel */
+    #controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #status {
+      padding: 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    #status.idle {
+      background: #e7f3ff;
+      color: #004085;
+    }
+
+    #status.running {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    #status.pass {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    #status.blocked {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    #status.fail {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    /* Capability Report */
+    #capabilityReport {
+      grid-column: 1 / -1;
+    }
+
+    .capability-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .capability-table th,
+    .capability-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+
+    .capability-table th {
+      background: #f5f5f5;
+      font-weight: 600;
+    }
+
+    .capability-table td:last-child {
+      text-align: right;
+    }
+
+    .capability-pass {
+      color: #28a745;
+      font-weight: bold;
+    }
+
+    .capability-blocked {
+      color: #ffc107;
+      font-weight: bold;
+    }
+
+    .capability-fail {
+      color: #dc3545;
+      font-weight: bold;
+    }
+
+    .capability-pending {
+      color: #17a2b8;
+      font-weight: bold;
+    }
+
+    .conclusion {
+      grid-column: 1 / -1;
+      padding: 20px;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 16px;
+      text-align: center;
+    }
+
+    .conclusion.pass {
+      background: #d4edda;
+      color: #155724;
+      border: 2px solid #28a745;
+    }
+
+    .conclusion.blocked {
+      background: #fff3cd;
+      color: #856404;
+      border: 2px solid #ffc107;
+    }
+
+    .conclusion.fail {
+      background: #f8d7da;
+      color: #721c24;
+      border: 2px solid #dc3545;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>AI Playwright — Browser-Local Feasibility Spike (PR #6)</h1>
+
+    <!-- Fixture Panel -->
+    <div class="panel">
+      <h2>Fixture: Project Manager</h2>
+      <div id="fixture">
+        <button id="create">Create Project</button>
+        <input id="name" type="text" placeholder="Project name">
+        <button id="add">Add to List</button>
+        <div>
+          <strong>Projects:</strong>
+          <ul id="projects"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trace Panel -->
+    <div class="panel">
+      <h2>Kernel Trace</h2>
+      <div id="status" class="idle">Ready</div>
+      <div id="trace"></div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="panel">
+      <h2>Feasibility Experiment</h2>
+      <div id="controls">
+        <button id="runExperiment">Run Browser-Local Experiment</button>
+        <button id="runMockExperiment">Run Mock Experiment (baseline)</button>
+        <button id="clearTrace">Clear Trace</button>
+      </div>
+    </div>
+
+    <!-- Capability Report -->
+    <div class="panel" id="capabilityReport">
+      <h2>Capability Report</h2>
+      <table class="capability-table">
+        <thead>
+          <tr>
+            <th>Capability</th>
+            <th>Status</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody id="capabilityTableBody">
+          <tr>
+            <td>aipw-core loaded</td>
+            <td><span class="capability-pending">PENDING</span></td>
+            <td id="cap-kernel"></td>
+          </tr>
+          <tr>
+            <td>WebLLM/WebGPU</td>
+            <td><span class="capability-pending" id="cap-webllm-status">PENDING</span></td>
+            <td id="cap-webllm"></td>
+          </tr>
+          <tr>
+            <td>Browser execution</td>
+            <td><span class="capability-pending" id="cap-execution-status">PENDING</span></td>
+            <td id="cap-execution"></td>
+          </tr>
+          <tr>
+            <td>No server fallback</td>
+            <td><span class="capability-pending" id="cap-noserver-status">PENDING</span></td>
+            <td id="cap-noserver"></td>
+          </tr>
+          <tr>
+            <td>Kernel purity</td>
+            <td><span class="capability-pending" id="cap-purity-status">PENDING</span></td>
+            <td id="cap-purity"></td>
+          </tr>
+        </tbody>
+      </table>
+      <div id="conclusionContainer"></div>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.ts"></script>
+</body>
+</html>

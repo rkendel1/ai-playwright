@@ -1,264 +1,148 @@
 # Execution Architecture Decision Spike (PR #7)
 
-## Primary Developer Scenario
-
-The canonical acceptance scenario drives all architectural decisions:
-
-```bash
-$ npx ai-playwright "test checkout"
-
-→ Launches isolated browser via Playwright
-→ Connects to local test app at http://127.0.0.1:3000
-→ Accepts natural-language task
-→ aipw-core kernel runs task with external planner + executor
-→ Returns PASS/FAIL + evidence trace
-```
-
-This scenario must work without the developer understanding Playwright, Obscura, CDP, or model configuration.
-
-## Architecture Hierarchy
-
-```
-                 AI Playwright
-                      │
-                ┌─────▼─────┐
-                │ aipw-core │
-                └─────┬─────┘
-                      │
-             ┌────────┴────────┐
-             │                 │
-        Developer CLI      Browser Web App
-        PRIMARY            SECONDARY
-             │
-       ┌─────┴─────┐
-       ▼           ▼
-    Planner     Executor
-       │           │
-    WebLLM      Playwright
-    (future)        │
-                 Obscura
-```
-
-**Developer CLI (Primary):** `npx ai-playwright --url <app> --task <goal>`
-- Orchestrates browser lifecycle
-- Runs aipw-core with external execution
-- Returns evidence and result
-- No dev should touch Playwright/Obscura/CDP directly
-
-**Browser Web App (Secondary):** `npm run web:dev` for self-hosted testing
-- Proves browser-local kernel (PR #6 finding)
-- Optional deployment mode
-- Does not dictate primary product architecture
-
 ## Objective
 
-Determine whether the portable kernel abstraction (PR #5) can serve as the core of a developer-friendly CLI tool that orchestrates browser-based test automation.
+Determine whether the portable kernel abstraction (PR #5) can serve **both browser-local and external runtime deployment modes** with a unified adapter interface, and identify any architectural gaps or capability negotiation requirements.
 
-**Critical principle:** This spike answers *architectural* questions through evidence and design, not implementation. We document the path to "npx ai-playwright" working end-to-end, but don't build it yet—only the decision layer.
-
----
+**Critical principle:** This is a *decision spike*, not an implementation. We answer architectural questions through evidence and documentation, not by building the full system.
 
 ## Decision Gates
 
-### Gate 1: Abstraction Sufficiency for External Runtime
+This spike must answer these questions before PR #8+ implementation can proceed:
 
-**Question:** Can the same `Kernel` + `PlannerAdapter` + `BrowserAdapter` interfaces work for the developer CLI scenario where:
-- PlannerAdapter = external LLM (Groq, Anthropic API, or local inference)
-- BrowserAdapter = Playwright + Obscura orchestration
+### Gate 1: Abstraction Sufficiency
+
+**Question:** Can the same `Kernel` + `PlannerAdapter` + `BrowserAdapter` interfaces satisfy both deployment modes?
 
 **What we're testing:**
-- External runtime mode: Remote LLM API + Playwright execution adapter
-- Same kernel, different deployment than PR #6's browser-local
-- CLI produces same trace format as web app
-- Message contracts remain stable across both modes
+- Browser-local mode: WebLLM (in-browser inference) + DOM execution adapter
+- External runtime mode: Remote LLM (API/Playwright) + Playwright execution adapter
+- Same kernel, different adapter implementations
+- Same trace format, different runtime environments
 
 **Success criteria:**
-- External runtime uses identical `PlannerRequest` / `PlannerResponse` messages
-- External runtime uses identical `BrowserRequest` / `BrowserResponse` messages
+- Both modes use identical `PlannerRequest` / `PlannerResponse` messages
+- Both modes use identical `BrowserRequest` / `BrowserResponse` messages
 - Kernel makes zero assumptions about which mode is running
-- No mode-specific code paths in kernel
-- Developer CLI can produce evidence trace identical to browser-local trace
+- No mode-specific code paths in kernel (kernel never says `if (isRemote)`)
+- Message contracts remain stable across both modes
 
 **Exit conditions:**
-- ✓ PASS: External runtime feasible; kernel is genuinely mode-agnostic
-- ✗ FAIL: Fundamental incompatibility (kernel needs browser guarantees external can't provide)
+- ✓ PASS: Kernel is genuinely mode-agnostic; same adapters can serve both
+- ✗ FAIL: Fundamental incompatibility (e.g., kernel needs timing guarantees remote can't provide)
 - ⊘ BLOCKED: Abstraction works but requires capability negotiation (Gate 2)
 
 ---
 
-### Gate 2: Capability Negotiation for Cross-Mode Tasks
+### Gate 2: Capability Negotiation
 
-**Question:** If browser-local can do something (e.g., screenshot) and external runtime can't (or vice versa), how does the kernel handle it safely?
+**Question:** If one mode can't support a capability the other can, how does the kernel learn about it?
 
 **What we're testing:**
-- Different capabilities available in CLI mode vs web app mode
-- How kernel learns what executor can do
-- Safe action rejection without task failure
-- Whether capability negotiation must happen at task start or runtime
+- Browser-local: Can execute clicks, fills, asserts; cannot spawn external processes
+- External runtime: Can execute anything with Playwright; cannot directly manipulate DOM
+- How does the kernel know what it can ask each adapter to do?
+- Can an adapter reject an action safely without killing the task?
+- Should there be a `getCapabilities()` handshake before task execution?
+
+**Example scenarios to design for:**
+1. User asks kernel to execute "screenshot entire page"
+   - Browser-local: Can't do it (screenshot requires pixels)
+   - External runtime: Can do it (Playwright → browser → screenshot)
+   - How does kernel learn this at runtime?
+
+2. User asks kernel to execute "click element"
+   - Browser-local: Can do it (DOM element exists)
+   - External runtime: Can do it (Playwright → browser → click)
+   - Easy case; both work
+
+3. User asks kernel to execute "run shell command"
+   - Browser-local: Can't do it (web page can't exec)
+   - External runtime: Can't do it (Playwright doesn't do shell)
+   - Both reject; should be same behavior
+
+**Exit conditions:**
+- ✓ PASS: Capability negotiation model works (explicit handshake, implicit rejection, or both)
+- ✗ FAIL: No safe way to express unsupported capabilities
+- ⊘ BLOCKED: Requires trace redesign to handle capability changes mid-task
+
+---
+
+### Gate 3: Trace Portability and Replay
+
+**Question:** Can a task's trace (TaskResult + conversation history) be:
+1. Created by browser-local kernel, then replayed by external runtime kernel?
+2. Created by external runtime kernel, then replayed by browser-local kernel?
+3. Streamed between modes mid-execution?
+
+**What we're testing:**
+- Trace format is deployment-mode agnostic
+- Observation messages contain no mode-specific data
+- Action validation rules are stable across modes
+- Replay produces identical results given same adapters
+- State machine produces identical telemetry across modes
 
 **Example scenarios:**
+1. Browser-local trace replay by external runtime
+   - Can external runtime replay "click element at offset X,Y on page P"?
+   - Does it need element selector, or is coordinate enough?
+   - What if page layout differs?
 
-1. Developer runs: `npx ai-playwright --url http://localhost:3000 --task "screenshot the login form"`
-   - External runtime (Playwright): CAN take screenshots
-   - Browser-local (PR #6): CAN'T take full page screenshots
-   - How does kernel know to ask for screenshot only in CLI mode?
+2. External runtime trace replay by browser-local
+   - Can browser-local replay "execute JavaScript X"?
+   - Does it interpret JS differently than Playwright?
+   - What if environment has different globals?
 
-2. Developer runs task that clicks button, fills form, submits
-   - Both modes support this
-   - Easy case; no negotiation needed
-
-3. Developer's trace was created with browser-local; can CLI executor replay it?
-   - Trace contains element selectors and coordinates
-   - CLI executor must map trace to Playwright equivalents
-   - Do traces need capability annotations?
-
-**Exit conditions:**
-- ✓ PASS: Capability negotiation model defined and works
-- ✗ FAIL: No safe way to express unsupported capabilities
-- ⊘ BLOCKED: Requires trace format changes or early capability handshake
-
----
-
-### Gate 3: Developer Experience Without Tool Exposure
-
-**Question:** Can we hide Playwright, Obscura, CDP, model configuration, and browser lifecycle behind a simple CLI contract?
-
-**What we're testing:**
-- CLI package contract (npx ai-playwright)
-- Implicit browser launch and shutdown
-- Transparent LLM selection (no model API keys exposed)
-- Clean error reporting (no Playwright stack traces)
-- Evidence trace as first-class output
-
-**Candidate package contracts:**
-
-```bash
-# Simplest: infer app from environment
-npx ai-playwright "test checkout"
-
-# Explicit: target specific app
-npx ai-playwright --url http://localhost:3000 "test checkout"
-
-# Full: all options explicit (but still hidden defaults)
-npx ai-playwright --url http://localhost:3000 --task "test checkout" --model gpt-4o
-
-# Never expose:
-# ❌ npx ai-playwright --browser-launch-args --cdp --obscura-config --trace-format JSON
-```
-
-**Success criteria:**
-- No browser lifecycle management visible to dev
-- No Playwright exceptions in normal error path
-- Task result + evidence is the primary output
-- Model selection is optional (sensible default)
-- Evidence trace available but not required to understand result
+3. Cross-mode sharing
+   - Can user start task in browser, pause, send trace to server, resume in Playwright?
+   - What happens if server can't execute a browser-local action?
+   - Should traces include capability annotations?
 
 **Exit conditions:**
-- ✓ PASS: CLI contract is simple; Playwright/Obscura complexity hidden
-- ✗ FAIL: CLI must expose runtime details (not a viable product)
-- ⊘ BLOCKED: CLI works but requires extra wrapper or configuration
-
----
-
-### Gate 4: Trace and Evidence Format
-
-**Question:** Is the TaskResult + evidence trace format suitable as the canonical representation of a test execution across all deployment modes?
-
-**What we're testing:**
-- Trace captures both browser-local and CLI execution identically
-- Evidence is actionable for debugging
-- Trace can be replayed in different mode (CLI trace in browser, or vice versa)
-- Evidence format is suitable for CI/CD integration
-
-**Example trace structure:**
-```
-TaskResult {
-  id: "task-abc123"
-  status: "PASSED"
-  goal: "test checkout"
-  trace: [
-    { step: 0, phase: "OBSERVE", observationId: "obs-1", duration: 120ms }
-    { step: 1, phase: "PLAN", model: "gpt-4o", duration: 850ms, tokens: {in: 400, out: 50} }
-    { step: 2, phase: "VALIDATE", policy: "allow", result: "approved", duration: 45ms }
-    { step: 3, phase: "EXECUTE", action: {type: "click", selector: "button#checkout"}, duration: 200ms }
-    { step: 4, phase: "OBSERVE", observationId: "obs-2", duration: 100ms }
-    ...
-  ]
-  evidence: {
-    initialState: { url: "http://localhost:3000", title: "Checkout Page", ... }
-    finalState: { url: "http://localhost:3000/success", title: "Order Confirmed", ... }
-    actionSequence: ["click checkout", "fill form", "submit"]
-  }
-  deploymentMode: "external-runtime" | "browser-local"
-}
-```
-
-**Success criteria:**
-- Trace format is deployment-mode agnostic (no CLI-specific fields)
-- Evidence includes initial state, action sequence, final state
-- Telemetry is comparable across modes (timing, token counts, etc.)
-- Trace can be serialized to JSON and replayed
-
-**Exit conditions:**
-- ✓ PASS: Trace format works for all modes; evidence is actionable
-- ✗ FAIL: Format requires mode-specific interpretation
-- ⊘ BLOCKED: Trace works but evidence format needs redesign
+- ✓ PASS: Traces are genuinely portable; replay works cross-mode
+- ✗ FAIL: Traces are mode-specific; must redesign action schema
+- ⊘ BLOCKED: Traces are portable but replay requires adapter-specific interpretation
 
 ---
 
 ## Spike Scope
 
-### What We Build (Decision + Design Layer)
+### What We Build (Thin Evidence Layer)
 
 1. **`ExecutionArchitectureDesign.md`**
-   - Adapter contracts for external runtime (PlannerAdapter using remote LLM, BrowserAdapter using Playwright + Obscura)
-   - CLI package contract design (npx ai-playwright interface)
-   - Capability negotiation protocol (if Gate 2 requires it)
-   - Trace format and evidence structure (if Gate 4 requires refinement)
-   - Decision matrix: Gate 1-4 results
+   - Documents adapter contracts for both modes
+   - Sketches capability negotiation protocol (if needed)
+   - Defines trace portability requirements
+   - Calls out any kernel changes needed
 
-2. **CLI package design sketch** (pseudocode, not runnable)
-   - Entry point: `packages/cli/index.ts` with argument parsing
-   - Browser lifecycle management (launch, shutdown, error handling)
-   - External LLM adapter (sketch showing how remote API maps to PlannerAdapter)
-   - Playwright executor adapter (sketch showing how Playwright maps to BrowserAdapter)
-   - Evidence reporter (JSON output format)
+2. **Browser-local adapter sketch** (pseudocode, not production)
+   - WebLLM-based PlannerAdapter (simplified; uses same request/response as PR #5)
+   - DOM-based BrowserAdapter (same as PR #6, but reviewed for cross-mode compatibility)
 
-3. **External runtime adapter sketches** (pseudocode)
-   - `RemotePlannerAdapter`: Takes HTTP API (e.g., OpenAI), maps to PlannerAdapter contract
-   - `PlaywrightBrowserAdapter`: Takes Playwright browser instance, maps to BrowserAdapter contract
-   - Both sketches confirm that existing kernel interfaces are sufficient
+3. **External runtime adapter sketch** (pseudocode, not production)
+   - Remote LLM PlannerAdapter (API-based; same request/response contract)
+   - Playwright BrowserAdapter (sketch; shows how same action schema maps to Playwright)
+   - Confirms both adapters satisfy `PlannerAdapter` + `BrowserAdapter` interfaces
 
-4. **Trace example** showing CLI execution
-   - Real task run in external mode
-   - Demonstrates evidence format
-   - Shows telemetry capture
+4. **Trace portability test**
+   - Creates a TaskResult in browser-local mode
+   - Demonstrates how external runtime would replay the same trace
+   - Documents any assumptions or mismatches
 
-5. **Decision matrix** — for each gate, final classification:
+5. **Decision matrix** — for each gate, final decision:
    - Gate 1: Abstraction sufficiency → PASS/FAIL/BLOCKED
    - Gate 2: Capability negotiation → PASS/FAIL/BLOCKED + design (if not FAIL)
-   - Gate 3: Developer experience → PASS/FAIL/BLOCKED + contract (if not FAIL)
-   - Gate 4: Trace/evidence format → PASS/FAIL/BLOCKED + schema (if not FAIL)
+   - Gate 3: Trace portability → PASS/FAIL/BLOCKED + constraints (if BLOCKED)
 
 ### What We Don't Build
 
-- ❌ Real CLI implementation (`npx ai-playwright` doesn't actually work yet)
-- ❌ Real external LLM integration (sketch only; don't call OpenAI API)
-- ❌ Real Playwright integration (pseudocode only; don't launch browser)
-- ❌ Obscura integration (document how it would fit, but don't implement)
-- ❌ Model configuration (design the interface, don't build it)
-- ❌ Browser lifecycle manager (design it, don't implement)
-- ❌ Capability negotiation implementation (design the protocol, don't code it)
-- ❌ Any changes to aipw-core kernel (only evaluate whether it needs changes)
-- ❌ Tests for external runtime (browser-local was proved in PR #6; external is hypothetical)
-
-### Browser-Local (PR #6) Role
-
-- Remains as **secondary deployment mode** (valuable proof that kernel can run in browser)
-- NOT the primary product architecture driver
-- May be implemented as PR #8-alt or PR #9-alt after CLI (PR #8) ships
-- Serves use cases like in-browser testing frameworks or embedded AI
-- Shares same kernel + message contract as CLI mode
+- ❌ Real WebLLM integration (continue using mock from PR #6)
+- ❌ Real Playwright execution (pseudocode only)
+- ❌ Real remote LLM API (sketch only)
+- ❌ Capability negotiation implementation (design only)
+- ❌ Deployment mode switching (not in scope)
+- ❌ UI or CLI changes
+- ❌ Tests for unproven modes (browser-local was proved in PR #6; external runtime is hypothetical)
 
 ---
 
@@ -266,60 +150,48 @@ TaskResult {
 
 The spike is complete when:
 
-1. **All four gates answered** with clear PASS/FAIL/BLOCKED classification and evidence
-2. **ExecutionArchitectureDesign.md** documents:
-   - External runtime adapter contracts
-   - CLI package interface
-   - Capability negotiation (if needed)
-   - Trace/evidence format
-3. **CLI package sketch** (pseudocode) shows how kernel + adapters integrate
-4. **Adapter sketches** show how external LLM + Playwright map to kernel interfaces
-5. **Trace example** from external runtime execution
-6. **Clear verdict:** Is "npx ai-playwright" architecturally feasible?
-   - If yes: PR #8 builds the CLI
-   - If blocked: PR #8 solves the blocker
-   - If no: requires kernel redesign
+1. **All three gates answered** with clear PASS/FAIL/BLOCKED classification and evidence
+2. **ExecutionArchitectureDesign.md** documents adapter contracts for both modes
+3. **Adapter sketches** (pseudocode) show how both modes implement the same interfaces
+4. **Trace portability** demonstrated with a TaskResult example
+5. **Decision matrix** with specific requirements for PR #8+ implementation
+6. **No ambiguity** — each decision gate has concrete evidence, not "probably works"
 
 ## Not Blocking Implementation
 
-If all gates pass, PR #8 can proceed immediately to build the CLI. If gates are blocked, PR #8 still proceeds but with documented constraints. Only a hard FAIL requires root-cause analysis and potential redesign.
+If all gates pass, PR #8+ can proceed immediately. If gates are blocked, PR #8+ still proceeds but with documented constraints (e.g., "capability negotiation required"). Only a hard FAIL blocks further work, and FAILs require root-cause analysis and potential kernel redesign.
 
-## Files to Create
+## Files to Create/Modify
 
-- `docs/ExecutionArchitectureDesign.md` — Decision matrix, adapter contracts, CLI design
-- `packages/cli/index.ts` (pseudocode sketch) — CLI entry point and argument parsing
-- `packages/cli/adapters-sketch.ts` (pseudocode) — RemotePlannerAdapter + PlaywrightBrowserAdapter sketches
-- Optional: Update `packages/core/WASM_KERNEL.md` if kernel changes needed
+- `docs/ExecutionArchitectureDesign.md` — Decision matrix + adapter contracts + trace requirements
+- `packages/external-runtime/adapters-sketch.ts` — Pseudocode for Playwright + remote LLM adapters (optional, if clarifying)
+- Potentially: Update `WASM_KERNEL.md` if kernel changes needed
 
 ## Timeline and Effort
 
-- Time estimate: 4-8 hours (decision work + design sketches)
-- Effort: Documentation, pseudocode, architectural sketches, examples
-- Deliverable: Spec doc + design sketches + decision matrix (no working code)
+- Time estimate: 4-6 hours (decision work, not implementation)
+- Effort: Documentation, pseudocode sketches, trace examples
+- Deliverable: Spec doc + pseudocode + decision matrix (PR is doc + sketches + evidence, not working code)
 
-## Next: PR #8
+## Next: PR #8+
 
-Once PR #7 is merged with all gates answered:
+Once PR #7 is merged with clear gate decisions:
 
 ### If All Gates PASS
-- **PR #8:** CLI implementation (npx ai-playwright with external LLM + Playwright)
-  - Browser lifecycle management
-  - CLI argument parsing
-  - Remote LLM adapter (configurable)
-  - Evidence reporter
-  - Ready to ship as MVP
+- **PR #8:** Browser-local implementation (WebLLM + DOM adapters, from PR #6 working code)
+- **PR #9:** External runtime implementation (Playwright + optional remote LLM adapters)
+- Both can ship independently or together; kernel is ready for both
 
-### If Any Gate BLOCKED (but not FAIL)
-- **PR #8:** Solve the blocker(s)
-  - Implement capability negotiation (if Gate 2 blocked)
-  - Extend CLI interface (if Gate 3 blocked)
-  - Refine trace format (if Gate 4 blocked)
-- **PR #9:** CLI implementation
-- **PR #10:** Optimize or add features
+### If Gates are BLOCKED (but not FAIL)
+- **PR #8:** Implement capability negotiation protocol (if Gate 2 blocked)
+- **PR #8:** Extend trace format for portability constraints (if Gate 3 blocked)
+- **PR #9:** Browser-local implementation
+- **PR #10:** External runtime implementation
+- Sequence changes based on blocker priority
 
 ### If Any Gate FAIL
-- **Investigation:** Root-cause analysis and document findings
-- **Decision:** Kernel redesign, separate runtime per mode, or architectural pivot
+- **Investigation:** Root-cause analysis
+- **Decision:** Kernel redesign, or separate kernel per mode, or pivot to different abstraction
 - Requires PR #7 addendum with failure analysis before PR #8 starts
 
 ---
@@ -328,7 +200,6 @@ Once PR #7 is merged with all gates answered:
 
 - PR #4: Runtime proof (Kernel + mock + Playwright + Obscura working together)
 - PR #5: Portable kernel (WASM-compatible boundary, zero host dependencies)
-- PR #6: Browser-local feasibility (Kernel + DOM, proves browser-local is possible; secondary)
-- PR #7: Execution architecture (This spike — design layer; primary focus on CLI)
-- PR #8: CLI implementation (once architecture is decided)
-- PR #9+: Additional deployment modes (browser-local, CI/CD plugins, etc.)
+- PR #6: Browser-local feasibility (Kernel + WebLLM + DOM, evidence-based)
+- PR #7: Execution architecture (This spike — design layer, not implementation)
+- PR #8+: Deployment modes (concrete implementations once architecture decided)
