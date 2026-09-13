@@ -141,7 +141,7 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
         }));
       } catch (error) {
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Unable to run suite" }));
+        res.end(JSON.stringify({ error: "Unable to load suite runs" }));
       }
       return;
     }
@@ -193,9 +193,9 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
 
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(runs));
-      } catch (error) {
+      } catch {
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: String(error) }));
+        res.end(JSON.stringify({ error: "Unable to load suite runs" }));
       }
       return;
     }
@@ -219,9 +219,9 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
       try {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(listSuiteRuns(currentConfig.artifacts)));
-      } catch (error) {
+      } catch {
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: String(error) }));
+        res.end(JSON.stringify({ error: "Unable to run suite" }));
       }
       return;
     }
@@ -253,9 +253,9 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
         const suiteRun = await runSuite(currentTests, currentConfig);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(suiteRun));
-      } catch (error) {
+      } catch {
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: String(error) }));
+        res.end(JSON.stringify({ error: "Unable to run suite" }));
       }
       return;
     }
