@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:wasm": "tsc -p tsconfig.wasm.json",
     "test": "vitest run",
     "dev": "tsx packages/cli/index.ts"
   },
