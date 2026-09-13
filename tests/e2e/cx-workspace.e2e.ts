@@ -2,13 +2,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import type http from "node:http";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { chromium, type Browser, type Page } from "playwright";
 import { startUIServer } from "../../packages/workspace/ui-server.js";
 import { discoverTests, resolveConfig, runSuite } from "../../packages/workspace/index.js";
 import { startCXApp } from "../fixtures/cxApp.js";
 
-const repoRoot = "/home/runner/work/ai-playwright/ai-playwright";
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const screenshotDir = path.join(repoRoot, "docs/images/cx");
 const updateScreenshots = process.env.AIPW_UPDATE_CX_SCREENSHOTS === "1";
 const runCXWorkspace = process.env.AIPW_RUN_CX_WORKSPACE === "1" || updateScreenshots;
@@ -73,6 +74,14 @@ async function loadSuiteRunsWithRetry(baseUrl: string): Promise<Array<{ id: stri
   throw new Error("Restarted UI did not expose suite history in time.");
 }
 
+function serverBaseUrl(server: http.Server): string {
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Unable to resolve UI server address.");
+  }
+  return `http://127.0.0.1:${address.port}`;
+}
+
 describe("CX workspace acceptance", () => {
   let browser: Browser | undefined;
   let uiServer: http.Server | undefined;
@@ -111,11 +120,12 @@ describe("CX workspace acceptance", () => {
       "utf-8"
     );
 
-    uiServer = await startUIServer(workspaceDir, 3001);
+    uiServer = await startUIServer(workspaceDir, updateScreenshots ? 3001 : 0);
+    const uiUrl = serverBaseUrl(uiServer);
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({ viewport: { width: 1440, height: 1600 } });
 
-    await page.goto("http://127.0.0.1:3001");
+    await page.goto(uiUrl);
     await page.getByText("No tests yet").waitFor();
     await maybeScreenshot(page, "01-empty-workspace.png");
 
@@ -180,8 +190,8 @@ describe("CX workspace acceptance", () => {
     await maybeScreenshot(page, "10-suite-history.png");
 
     await closeServer(uiServer);
-    uiServer = await startUIServer(workspaceDir, 3001);
-    const suiteRuns = await loadSuiteRunsWithRetry("http://127.0.0.1:3001");
+    uiServer = await startUIServer(workspaceDir, updateScreenshots ? 3001 : 0);
+    const suiteRuns = await loadSuiteRunsWithRetry(serverBaseUrl(uiServer));
     expect(suiteRuns.length).toBeGreaterThanOrEqual(2);
   }, 180000);
 });

@@ -289,10 +289,18 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
     res.end("Not found");
   });
 
-  await new Promise<void>((resolve) => {
+  await new Promise<void>((resolve, reject) => {
+    const onError = (error: Error) => {
+      server.off("error", onError);
+      reject(error);
+    };
+    server.once("error", onError);
     server.listen(port, () => {
+      server.off("error", onError);
+      const address = server.address();
+      const actualPort = address && typeof address !== "string" ? address.port : port;
       console.log(`\n📊 AI Playwright UI`);
-      console.log(`   Open: http://127.0.0.1:${port}`);
+      console.log(`   Open: http://127.0.0.1:${actualPort}`);
       console.log(`   Workspace: ${workspaceDir}`);
       resolve();
     });

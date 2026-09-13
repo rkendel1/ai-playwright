@@ -594,6 +594,16 @@
       return (durationMs / 1000).toFixed(1) + 's';
     }
 
+    async function readResponseBody(response) {
+      const text = await response.text();
+      if (!text) return {};
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { error: text || response.statusText };
+      }
+    }
+
     function selectedTest() {
       return state.tests.find((test) => test.id === state.selectedTestId) || null;
     }
@@ -731,7 +741,8 @@
 
     async function loadRunHistory(testId) {
       const response = await fetch('/api/tests/' + testId + '/runs');
-      return await response.json();
+      const payload = await readResponseBody(response);
+      return Array.isArray(payload) ? payload : [];
     }
 
     function renderTestDetail() {
@@ -1130,7 +1141,8 @@
 
     async function loadTests() {
       const response = await fetch('/api/tests');
-      state.tests = await response.json();
+      const payload = await readResponseBody(response);
+      state.tests = Array.isArray(payload) ? payload : [];
       if (state.selectedTestId && !state.tests.find((test) => test.id === state.selectedTestId)) {
         state.selectedTestId = null;
         if (state.currentView === 'test') state.currentView = 'welcome';
@@ -1139,7 +1151,8 @@
 
     async function loadSuiteRuns() {
       const response = await fetch('/api/suite-runs');
-      state.suiteRuns = await response.json();
+      const payload = await readResponseBody(response);
+      state.suiteRuns = Array.isArray(payload) ? payload : [];
       if (state.selectedSuiteRun) {
         state.selectedSuiteRun = state.suiteRuns.find((run) => run.id === state.selectedSuiteRun.id) || state.selectedSuiteRun;
       }
@@ -1204,9 +1217,9 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, task, url: url || undefined }),
         });
-        const payload = await response.json();
+        const payload = await readResponseBody(response);
         if (!response.ok) {
-          alert('Error saving test: ' + payload.error);
+          alert('Error saving test: ' + (payload.error || response.statusText));
           return;
         }
         closeNewTestForm();
@@ -1223,8 +1236,8 @@
       if (!confirm('Delete test "' + test.name + '"? This cannot be undone.')) return;
       const response = await fetch('/api/tests/' + test.id, { method: 'DELETE' });
       if (!response.ok) {
-        const payload = await response.json();
-        alert('Error deleting test: ' + payload.error);
+        const payload = await readResponseBody(response);
+        alert('Error deleting test: ' + (payload.error || response.statusText));
         return;
       }
       state.selectedTestId = null;
@@ -1248,9 +1261,9 @@
 
     async function viewRun(runId) {
       const response = await fetch('/api/runs/' + runId);
-      state.selectedRun = await response.json();
+      state.selectedRun = await readResponseBody(response);
       if (!response.ok) {
-        alert('Error loading run: ' + state.selectedRun.error);
+        alert('Error loading run: ' + (state.selectedRun.error || response.statusText));
         return;
       }
       state.selectedTestId = state.selectedRun.testId;
@@ -1276,9 +1289,9 @@
 
       try {
         const response = await fetch('/api/tests/' + test.id + '/run', { method: 'POST' });
-        const payload = await response.json();
+        const payload = await readResponseBody(response);
         if (!response.ok) {
-          alert('Error running test: ' + payload.error);
+          alert('Error running test: ' + (payload.error || response.statusText));
           return;
         }
         const remaining = 350 - (Date.now() - startedAt);
@@ -1320,9 +1333,9 @@
 
       try {
         const response = await fetch('/api/suite/run', { method: 'POST' });
-        const payload = await response.json();
+        const payload = await readResponseBody(response);
         if (!response.ok) {
-          alert('Error running suite: ' + payload.error);
+          alert('Error running suite: ' + (payload.error || response.statusText));
           return;
         }
         const remaining = 350 - (Date.now() - startedAt);
@@ -1330,7 +1343,7 @@
           await new Promise((resolve) => setTimeout(resolve, remaining));
         }
         await refresh();
-        state.selectedSuiteRun = payload;
+        state.selectedSuiteRun = state.suiteRuns.find((run) => run.id === payload.id) || payload;
         state.currentView = 'suite';
         render();
       } catch (error) {
