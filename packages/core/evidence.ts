@@ -9,6 +9,11 @@ export type Evidence =
       type: "limit";
       assertion: string;
       result: "passed" | "failed";
+    }
+  | {
+      type: "dryRun";
+      assertion: string;
+      result: "passed";
     };
 
 export type TaskError = {
@@ -21,12 +26,21 @@ export type StepResult = {
   output?: string;
 };
 
+export type StepTelemetry = {
+  observationMs: number;
+  inferenceMs: number;
+  executionMs: number;
+  inputTokens: number;
+  outputTokens: number;
+};
+
 export type Step = {
   index: number;
   observation: unknown;
   action: unknown;
   result: StepResult;
   timestamp: number;
+  telemetry?: StepTelemetry;
 };
 
 export type TaskResult = {
@@ -36,4 +50,5 @@ export type TaskResult = {
   error?: TaskError;
   artifactsPath: string;
   durationMs: number;
+  dryRun?: boolean;
 };

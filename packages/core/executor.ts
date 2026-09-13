@@ -12,8 +12,8 @@ export interface BrowserExecutor {
   execute(page: Page, action: BrowserAction, observation: Observation): Promise<ActionResult>;
 }
 
-async function resolveLocator(page: Page, targetId: string) {
-  const locator = page.locator(`[data-aipw-id='${targetId}']`).first();
+async function resolveLocator(page: Page, elementId: string) {
+  const locator = page.locator(`[data-aipw-id='${elementId}']`).first();
   await locator.waitFor({ state: "visible", timeout: 5000 });
   return locator;
 }
@@ -26,19 +26,19 @@ export class PlaywrightExecutor implements BrowserExecutor {
           await page.goto(action.url, { waitUntil: "domcontentloaded" });
           return { status: "success" };
         case "click":
-          await (await resolveLocator(page, action.target.id)).click();
+          await (await resolveLocator(page, action.target.elementId)).click();
           return { status: "success" };
         case "fill":
-          await (await resolveLocator(page, action.target.id)).fill(action.value);
+          await (await resolveLocator(page, action.target.elementId)).fill(action.value);
           return { status: "success" };
         case "press":
-          await (await resolveLocator(page, action.target.id)).press(action.key);
+          await (await resolveLocator(page, action.target.elementId)).press(action.key);
           return { status: "success" };
         case "select":
-          await (await resolveLocator(page, action.target.id)).selectOption(action.value);
+          await (await resolveLocator(page, action.target.elementId)).selectOption(action.value);
           return { status: "success" };
         case "hover":
-          await (await resolveLocator(page, action.target.id)).hover();
+          await (await resolveLocator(page, action.target.elementId)).hover();
           return { status: "success" };
         case "scroll":
           await page.mouse.wheel(0, (action.amount ?? 300) * (action.direction === "down" ? 1 : -1));
@@ -47,7 +47,7 @@ export class PlaywrightExecutor implements BrowserExecutor {
           await page.waitForTimeout(action.ms);
           return { status: "success" };
         case "extract": {
-          const text = await (await resolveLocator(page, action.target.id)).innerText();
+          const text = await (await resolveLocator(page, action.target.elementId)).innerText();
           return { status: "success", output: text };
         }
         case "assert": {

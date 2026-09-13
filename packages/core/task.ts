@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { BrowserAction } from "./actions.js";
+import type { ActionPolicy, BrowserAction } from "./actions.js";
 import { validateAction } from "./actions.js";
 import type { BrowserExecutor } from "./executor.js";
-import type { TaskResult, Evidence, Step } from "./evidence.js";
+import type { TaskResult, Evidence, Step, StepTelemetry } from "./evidence.js";
 import { observe } from "./observer.js";
 import type { Planner } from "./planner.js";
 import type { Page } from "playwright";
@@ -11,6 +11,10 @@ import type { Page } from "playwright";
 export type TaskLimits = {
   maxSteps: number;
   maxTimeMs: number;
+};
+
+export type TaskRunOptions = {
+  dryRun?: boolean;
 };
 
 export type TaskRunnerOptions = {
@@ -22,6 +26,8 @@ export type TaskRunnerOptions = {
   defaultUrl?: string;
   artifactsRoot: string;
   taskId: string;
+  policy?: ActionPolicy;
+  runOptions?: TaskRunOptions;
 };
 
 async function capture(page: Page, dir: string, index: number, label: string) {
@@ -29,34 +35,88 @@ async function capture(page: Page, dir: string, index: number, label: string) {
   await page.screenshot({ path: path.join(dir, filename), fullPage: true });
 }
 
-function shouldCaptureBefore(action: BrowserAction, stepObservationText: string) {
-  return action.type === "click" && /delete|remove/i.test(stepObservationText);
+function shouldCaptureBefore(action: BrowserAction, stepObservationText: string | undefined) {
+  return action.type === "click" && /delete|remove/i.test(stepObservationText ?? "");
 }
 
-function stepToConsole(action: BrowserAction): string {
+export function describeAction(action: BrowserAction): string {
   switch (action.type) {
     case "goto":
-      return `Opened ${action.url}`;
+      return `Navigate to ${action.url}`;
     case "click":
-      return "Clicked element";
+      return action.reason ?? `Click element ${action.target.elementId}`;
     case "fill":
-      return `Filled value '${action.value}'`;
+      return action.reason ?? `Fill element ${action.target.elementId} with "${action.value}"`;
     case "assert":
-      return "Assertion executed";
+      return action.assertion.type === "textVisible" ? `Verify "${action.assertion.text}" is visible` : `Verify URL contains "${action.assertion.value}"`;
     case "finish":
-      return `Finished: ${action.reason}`;
+      return `Finish: ${action.reason}`;
     case "blocked":
       return `Blocked: ${action.reason}`;
     default:
-      return `Executed ${action.type}`;
+      return action.reason ?? `Execute ${action.type}`;
   }
+}
+
+function estimateTokens(value: unknown): number {
+  return Math.ceil(JSON.stringify(value).length / 4);
+}
+
+async function writeTrace(artifactsPath: string, result: TaskResult): Promise<TaskResult> {
+  await fs.writeFile(path.join(artifactsPath, "trace.json"), JSON.stringify(result, null, 2));
+  return result;
+}
+
+async function dryRunTask(options: TaskRunnerOptions, startedAt: number, artifactsPath: string): Promise<TaskResult> {
+  const observationStarted = Date.now();
+  const observation = await observe(options.page);
+  const observationMs = Date.now() - observationStarted;
+  const inferenceStarted = Date.now();
+  const actions = options.planner.plan
+    ? await options.planner.plan({ task: options.task, observation, defaultUrl: options.defaultUrl })
+    : [await options.planner.next({ task: options.task, observation, history: [], remainingSteps: options.limits.maxSteps, defaultUrl: options.defaultUrl })];
+  const inferenceMs = Date.now() - inferenceStarted;
+
+  const steps = actions.map<Step>((action, index) => ({
+    index: index + 1,
+    observation,
+    action,
+    result: { status: "success", output: "dry-run: not executed" },
+    timestamp: Date.now(),
+    telemetry: {
+      observationMs: index === 0 ? observationMs : 0,
+      inferenceMs: index === 0 ? inferenceMs : 0,
+      executionMs: 0,
+      inputTokens: index === 0 ? estimateTokens({ task: options.task, observation }) : 0,
+      outputTokens: estimateTokens(action),
+    },
+  }));
+
+  const result: TaskResult = {
+    status: "passed",
+    steps,
+    evidence: [{ type: "dryRun", assertion: "No actions executed", result: "passed" }],
+    artifactsPath,
+    durationMs: Date.now() - startedAt,
+    dryRun: true,
+  };
+  return writeTrace(artifactsPath, result);
 }
 
 export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
   const { planner, executor, page, task, limits, defaultUrl, artifactsRoot, taskId } = options;
   const startedAt = Date.now();
   const artifactsPath = path.join(artifactsRoot, taskId);
+  const policy: ActionPolicy = {
+    allowedOrigins: defaultUrl ? [new URL(defaultUrl).origin] : undefined,
+    approval: "destructive",
+    ...options.policy,
+  };
   await fs.mkdir(artifactsPath, { recursive: true });
+
+  if (options.runOptions?.dryRun) {
+    return dryRunTask(options, startedAt, artifactsPath);
+  }
 
   const steps: Step[] = [];
   const evidence: Evidence[] = [];
@@ -69,90 +129,94 @@ export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
     if (Date.now() - startedAt > limits.maxTimeMs) {
       evidence.push({ type: "limit", assertion: "Task completed within time budget", result: "failed" });
       await capture(page, artifactsPath, screenshotIndex++, "failure");
-      const result: TaskResult = {
+      return writeTrace(artifactsPath, {
         status: "blocked",
         steps,
         evidence,
         error: { reason: "Maximum task time exceeded." },
         artifactsPath,
         durationMs: Date.now() - startedAt,
-      };
-      await fs.writeFile(path.join(artifactsPath, "trace.json"), JSON.stringify(result, null, 2));
-      return result;
+      });
     }
 
+    const observationStarted = Date.now();
     const observation = await observe(page);
-    const proposed = await planner.next({
+    const observationMs = Date.now() - observationStarted;
+    const plannerInput = {
       task,
       observation,
       history: steps,
       remainingSteps: limits.maxSteps - index,
       defaultUrl,
-    });
+    };
+    const inferenceStarted = Date.now();
+    const proposed = await planner.next(plannerInput);
+    const inferenceMs = Date.now() - inferenceStarted;
+    const telemetry: StepTelemetry = {
+      observationMs,
+      inferenceMs,
+      executionMs: 0,
+      inputTokens: estimateTokens(plannerInput),
+      outputTokens: estimateTokens(proposed),
+    };
 
     let action: BrowserAction;
     try {
-      action = validateAction(proposed, observation);
+      action = validateAction(proposed, observation, policy);
     } catch (error) {
       await capture(page, artifactsPath, screenshotIndex++, "failure");
-      const result: TaskResult = {
+      return writeTrace(artifactsPath, {
         status: "blocked",
         steps,
         evidence,
         error: { reason: error instanceof Error ? error.message : String(error) },
         artifactsPath,
         durationMs: Date.now() - startedAt,
-      };
-      await fs.writeFile(path.join(artifactsPath, "trace.json"), JSON.stringify(result, null, 2));
-      return result;
+      });
     }
 
     if (action.type === "blocked") {
       await capture(page, artifactsPath, screenshotIndex++, "failure");
-      const result: TaskResult = {
+      return writeTrace(artifactsPath, {
         status: "blocked",
         steps,
         evidence,
         error: { reason: action.reason },
         artifactsPath,
         durationMs: Date.now() - startedAt,
-      };
-      await fs.writeFile(path.join(artifactsPath, "trace.json"), JSON.stringify(result, null, 2));
-      return result;
+      });
     }
 
     if (action.type === "finish") {
       if (!hasVerifiedSuccess) {
         await capture(page, artifactsPath, screenshotIndex++, "failure");
-        const result: TaskResult = {
+        return writeTrace(artifactsPath, {
           status: "blocked",
           steps,
           evidence,
           error: { reason: "Planner requested finish before any successful observable verification." },
           artifactsPath,
           durationMs: Date.now() - startedAt,
-        };
-        await fs.writeFile(path.join(artifactsPath, "trace.json"), JSON.stringify(result, null, 2));
-        return result;
+        });
       }
       evidence.push({ type: "limit", assertion: "Task completed within step budget", result: "passed" });
       await capture(page, artifactsPath, screenshotIndex++, "final");
-      const result: TaskResult = {
+      return writeTrace(artifactsPath, {
         status: "passed",
         steps,
         evidence,
         artifactsPath,
         durationMs: Date.now() - startedAt,
-      };
-      await fs.writeFile(path.join(artifactsPath, "trace.json"), JSON.stringify(result, null, 2));
-      return result;
+      });
     }
 
     if (shouldCaptureBefore(action, observation.text)) {
       await capture(page, artifactsPath, screenshotIndex++, "before-destructive");
     }
 
+    const executionStarted = Date.now();
     const executed = await executor.execute(page, action, observation);
+    telemetry.executionMs = Date.now() - executionStarted;
 
     if (action.type === "assert") {
       if (executed.status === "success") {
@@ -172,6 +236,7 @@ export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
       action,
       result: { status: executed.status, error: executed.error, output: executed.output },
       timestamp: Date.now(),
+      telemetry,
     };
     steps.push(step);
 
@@ -182,33 +247,29 @@ export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
 
     if (executed.status === "failure") {
       await capture(page, artifactsPath, screenshotIndex++, "failure");
-      const result: TaskResult = {
+      return writeTrace(artifactsPath, {
         status: "failed",
         steps,
         evidence,
         error: { reason: executed.error ?? "Action execution failed." },
         artifactsPath,
         durationMs: Date.now() - startedAt,
-      };
-      await fs.writeFile(path.join(artifactsPath, "trace.json"), JSON.stringify(result, null, 2));
-      return result;
+      });
     }
 
     await capture(page, artifactsPath, screenshotIndex++, `step-${String(index).padStart(3, "0")}`);
 
-    void stepToConsole(action);
+    void describeAction(action);
   }
 
   evidence.push({ type: "limit", assertion: "Task completed within step budget", result: "failed" });
   await capture(page, artifactsPath, 999, "failure");
-  const result: TaskResult = {
+  return writeTrace(artifactsPath, {
     status: "blocked",
     steps,
     evidence,
     error: { reason: "Maximum step count exceeded." },
     artifactsPath,
     durationMs: Date.now() - startedAt,
-  };
-  await fs.writeFile(path.join(artifactsPath, "trace.json"), JSON.stringify(result, null, 2));
-  return result;
+  });
 }
