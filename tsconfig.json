@@ -10,5 +10,6 @@
     "outDir": "dist",
     "types": ["node"]
   },
-  "include": ["packages/**/*.ts", "tests/**/*.ts", "apps/**/*.ts"]
+  "include": ["packages/**/*.ts", "tests/**/*.ts", "apps/**/*.ts"],
+  "exclude": ["packages/**/*-sketch.ts"]
 }

@@ -145,7 +145,7 @@ describe("WASM Kernel - Message Boundary", () => {
       result,
     };
 
-    let serialized: string;
+    let serialized = "";
     expect(() => {
       serialized = JSON.stringify(conversation, null, 2);
     }).not.toThrow();
@@ -158,7 +158,7 @@ describe("WASM Kernel - Message Boundary", () => {
     // Deserialize and verify reconstruction
     // ========================================================================
 
-    let deserialized: typeof conversation;
+    let deserialized: typeof conversation = conversation;
     expect(() => {
       deserialized = JSON.parse(serialized);
     }).not.toThrow();
