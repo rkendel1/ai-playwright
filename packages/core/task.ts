@@ -3,7 +3,7 @@ import path from "node:path";
 import type { ActionPolicy, BrowserAction } from "./actions.js";
 import { validateAction } from "./actions.js";
 import type { BrowserExecutor } from "./executor.js";
-import type { TaskResult, Evidence, Step, StepResult, StepTelemetry } from "./evidence.js";
+import type { TaskResult, Evidence, Step, StepResult, StepTelemetry, StepPlannerTrace } from "./evidence.js";
 import { observe } from "./observer.js";
 import type { Planner } from "./planner.js";
 import type { Page } from "playwright";
@@ -43,7 +43,14 @@ async function writeTrace(artifactsPath: string, result: TaskResult): Promise<Ta
   return result;
 }
 
-function failedStep(index: number, observation: unknown, action: unknown, validation: StepResult, telemetry: StepTelemetry): Step {
+function plannerTrace(planner: Planner): StepPlannerTrace | undefined {
+  const trace = planner.consumeTrace?.();
+  if (trace) return trace;
+  if (planner.provider) return { provider: planner.provider, model: planner.model };
+  return undefined;
+}
+
+function failedStep(index: number, observation: unknown, action: unknown, validation: StepResult, telemetry: StepTelemetry, planner?: StepPlannerTrace): Step {
   return {
     index,
     observation,
@@ -52,6 +59,7 @@ function failedStep(index: number, observation: unknown, action: unknown, valida
     result: { status: "failure", error: validation.error },
     timestamp: Date.now(),
     telemetry,
+    planner,
   };
 }
 
@@ -99,9 +107,12 @@ export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
     };
     const inferenceStarted = Date.now();
     let proposed: unknown;
+    let stepPlannerTrace: StepPlannerTrace | undefined;
     try {
       proposed = await planner.next(plannerInput);
+      stepPlannerTrace = plannerTrace(planner);
     } catch (error) {
+      stepPlannerTrace = plannerTrace(planner);
       const telemetry: StepTelemetry = {
         observationMs,
         inferenceMs: Date.now() - inferenceStarted,
@@ -111,7 +122,7 @@ export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
         outputTokens: 0,
       };
       const reason = error instanceof Error ? error.message : String(error);
-      steps.push(failedStep(index, observation, undefined, { status: "failure", error: reason }, telemetry));
+      steps.push(failedStep(index, observation, undefined, { status: "failure", error: reason }, telemetry, stepPlannerTrace));
       await capture(page, artifactsPath, screenshotIndex++, "failure");
       return writeTrace(artifactsPath, {
         status: "blocked",
@@ -139,7 +150,7 @@ export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
     } catch (error) {
       telemetry.validationMs = Date.now() - validationStarted;
       const reason = error instanceof Error ? error.message : String(error);
-      steps.push(failedStep(index, observation, proposed, { status: "failure", error: reason }, telemetry));
+      steps.push(failedStep(index, observation, proposed, { status: "failure", error: reason }, telemetry, stepPlannerTrace));
       await capture(page, artifactsPath, screenshotIndex++, "failure");
       return writeTrace(artifactsPath, {
         status: "blocked",
@@ -160,6 +171,7 @@ export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
         result: { status: "success" },
         timestamp: Date.now(),
         telemetry,
+        planner: stepPlannerTrace,
       });
       await capture(page, artifactsPath, screenshotIndex++, "failure");
       return writeTrace(artifactsPath, {
@@ -175,7 +187,7 @@ export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
     if (action.type === "finish") {
       if (!hasVerifiedSuccess) {
         const reason = "Planner requested finish before any successful observable verification.";
-        steps.push(failedStep(index, observation, action, { status: "failure", error: reason }, telemetry));
+        steps.push(failedStep(index, observation, action, { status: "failure", error: reason }, telemetry, stepPlannerTrace));
         await capture(page, artifactsPath, screenshotIndex++, "failure");
         return writeTrace(artifactsPath, {
           status: "blocked",
@@ -195,6 +207,7 @@ export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
         result: { status: "success" },
         timestamp: Date.now(),
         telemetry,
+        planner: stepPlannerTrace,
       });
       await capture(page, artifactsPath, screenshotIndex++, "final");
       return writeTrace(artifactsPath, {
@@ -234,6 +247,7 @@ export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
       result: { status: executed.status, error: executed.error, output: executed.output },
       timestamp: Date.now(),
       telemetry,
+      planner: stepPlannerTrace,
     };
     steps.push(step);
 

@@ -13,6 +13,7 @@ import {
 import { startUIServer } from "../workspace/ui-server.js";
 import { formatRunResult, formatRunSummary } from "./result-formatter.js";
 import type { TestDefinition } from "../workspace/index.js";
+import type { ModelConfig, PlannerMode } from "../workspace/config.js";
 
 /**
  * Workspace CLI commands
@@ -45,16 +46,23 @@ export async function initWorkspace(workspaceDir: string): Promise<void> {
 
 export async function runTestCommand(
   testName?: string,
-  options?: { url?: string; workspaceDir?: string }
+  options?: { url?: string; workspaceDir?: string; planner?: PlannerMode; model?: ModelConfig }
 ): Promise<void> {
   const workspaceDir = options?.workspaceDir || process.cwd();
   const config = await resolveConfig(workspaceDir, {
     url: options?.url,
+    planner: options?.planner,
+    model: options?.model,
   });
 
   console.log("\nAI Playwright");
   console.log(`Workspace: ${workspaceDir}`);
   console.log(`Config: ${config.url || "default"}\n`);
+  console.log(`Planner: ${config.planner === "webllm" ? "WebLLM" : "Deterministic"}`);
+  if (config.planner === "webllm") {
+    console.log(`Model: ${typeof config.model === "object" ? config.model.model : process.env.AIPW_WEBLLM_MODEL ?? "(default)"}`);
+  }
+  console.log("");
 
   // Discover tests
   const tests = await discoverTests(config.tests);

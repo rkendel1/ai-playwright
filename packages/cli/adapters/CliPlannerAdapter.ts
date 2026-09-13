@@ -32,7 +32,7 @@ function pageContains(text: string | undefined, query: string): boolean {
 }
 
 export class CliPlannerAdapter implements Planner {
-  readonly provider = "cli-deterministic";
+  readonly provider = "deterministic";
 
   async next(input: PlannerInput): Promise<BrowserAction> {
     const { observation, history, defaultUrl } = input;

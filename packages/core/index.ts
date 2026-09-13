@@ -4,12 +4,12 @@ import type { TaskResult } from "./evidence.js";
 import { runTask } from "./task.js";
 import type { Planner } from "./planner.js";
 import { MockPlanner } from "./mockPlanner.js";
-import { WebLLMPlanner } from "../webllm/planner.js";
+import { WebLLMPlannerAdapter } from "../webllm/planner.js";
 import type { BrowserRuntime } from "./runtime.js";
 import { ObscuraRuntime } from "../obscura/runtime.js";
 import type { Page } from "playwright";
 
-export type PlannerMode = "webllm" | "mock";
+export type PlannerMode = "webllm" | "deterministic" | "mock";
 
 export type AiPlaywrightOptions = {
   browser?: "obscura";
@@ -39,8 +39,8 @@ function modelName(modelOption: AiPlaywrightOptions["model"]): string | undefine
 function createPlanner(options: AiPlaywrightOptions): Planner {
   if (typeof options.planner === "object") return options.planner;
   const mode = options.planner ?? "webllm";
-  if (mode === "mock") return new MockPlanner();
-  if (mode === "webllm") return new WebLLMPlanner({ model: modelName(options.model) });
+  if (mode === "deterministic" || mode === "mock") return new MockPlanner();
+  if (mode === "webllm") return new WebLLMPlannerAdapter({ model: modelName(options.model) });
   throw new Error(`Unsupported planner '${mode}'.`);
 }
 
@@ -94,4 +94,4 @@ export async function aiPlaywright(options: AiPlaywrightOptions = {}): Promise<A
 export type { TaskResult } from "./evidence.js";
 export type { BrowserAction } from "./actions.js";
 export { MockPlanner } from "./mockPlanner.js";
-export { WebLLMPlanner } from "../webllm/planner.js";
+export { WebLLMPlanner, WebLLMPlannerAdapter } from "../webllm/planner.js";

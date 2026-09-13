@@ -78,6 +78,8 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
             lastRun: latestRun?.finishedAt,
             failure: latestRun?.failure,
             durationMs: latestRun?.durationMs,
+            planner: latestRun?.planner || currentConfig.planner,
+            model: latestRun?.model || (typeof currentConfig.model === "object" ? currentConfig.model.model : undefined),
           };
         });
 
@@ -131,6 +133,8 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
           lastRun: latestRun?.finishedAt,
           failure: latestRun?.failure,
           durationMs: latestRun?.durationMs,
+          planner: latestRun?.planner || currentConfig.planner,
+          model: latestRun?.model || (typeof currentConfig.model === "object" ? currentConfig.model.model : undefined),
         }));
       } catch (error) {
         res.writeHead(500, { "Content-Type": "application/json" });
@@ -523,6 +527,16 @@ function getUIHTML(): string {
             <span class="info-label">URL</span>
             <span class="info-value">\${selectedTest.url || '(default)'}</span>
           </div>
+          <div class="info-row">
+            <span class="info-label">Planner</span>
+            <span class="info-value">\${selectedTest.planner === 'webllm' ? 'WebLLM' : 'Deterministic'}</span>
+          </div>
+          \${selectedTest.planner === 'webllm' ? \`
+          <div class="info-row">
+            <span class="info-label">Model</span>
+            <span class="info-value">\${selectedTest.model || '(default)'}</span>
+          </div>
+          \` : ''}
         </div>
 
         \${failureHtml}

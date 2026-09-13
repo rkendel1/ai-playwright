@@ -39,7 +39,7 @@ function submitButton(elements: PlannerInput["observation"]["elements"]) {
 }
 
 export class MockPlanner implements Planner {
-  readonly provider = "mock";
+  readonly provider = "deterministic";
 
   async next(input: PlannerInput): Promise<BrowserAction> {
     const { observation, history, defaultUrl } = input;

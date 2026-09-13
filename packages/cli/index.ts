@@ -3,8 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { aiPlaywright } from "../core/index.js";
-import { CliPlannerAdapter } from "./adapters/CliPlannerAdapter.js";
+import { aiPlaywright, type PlannerMode } from "../core/index.js";
 import { initWorkspace, runTestCommand, listTestsCommand, startUICommand } from "./workspace-commands.js";
 
 /**
@@ -22,16 +21,31 @@ import { initWorkspace, runTestCommand, listTestsCommand, startUICommand } from 
  * CLI → runner → CliPlannerAdapter → kernel → Playwright/Obscura
  */
 
+function parsePlanner(value: string | undefined): PlannerMode {
+  if (value === "webllm" || value === "deterministic" || value === "mock") return value;
+  throw new Error("Planner must be one of: webllm, deterministic");
+}
+
 export function parseArgs(args: string[]) {
+  if (args[0] !== "run") {
+    throw new Error('Usage: aipw run --url <URL> [--planner webllm|deterministic] "task"');
+  }
+
   let url: string | undefined;
+  let planner: PlannerMode = "webllm";
+  let model: string | undefined;
   let headed = false;
   let artifactsDir = path.join(process.cwd(), ".ai-playwright-results");
   const instructionParts: string[] = [];
 
-  for (let i = 0; i < args.length; i++) {
+  for (let i = 1; i < args.length; i++) {
     const token = args[i];
     if (token === "--url") {
       url = args[++i];
+    } else if (token === "--planner") {
+      planner = parsePlanner(args[++i]);
+    } else if (token === "--model") {
+      model = args[++i];
     } else if (token === "--headed") {
       headed = true;
     } else if (token === "--artifacts") {
@@ -42,11 +56,37 @@ export function parseArgs(args: string[]) {
   }
 
   const instruction = instructionParts.join(" ").trim();
+  if (!instruction) {
+    throw new Error("Please provide a task instruction");
+  }
 
-  return { url, instruction, headed, artifactsDir };
+  return { url, planner, model, instruction, headed, artifactsDir };
 }
 
-async function oneShotMode(url: string, instruction: string, artifactsDir: string, headed: boolean) {
+function parseWorkspaceTestArgs(args: string[]): { testName?: string; planner?: PlannerMode; model?: string; url?: string } {
+  let planner: PlannerMode | undefined;
+  let model: string | undefined;
+  let url: string | undefined;
+  const names: string[] = [];
+
+  for (let i = 1; i < args.length; i += 1) {
+    const token = args[i];
+    if (token === "--planner") {
+      planner = parsePlanner(args[++i]);
+    } else if (token === "--model") {
+      model = args[++i];
+    } else if (token === "--url") {
+      url = args[++i];
+    } else if (!token.startsWith("-")) {
+      names.push(token);
+    }
+  }
+
+  return { testName: names.join(" ").trim() || undefined, planner, model, url };
+}
+
+async function oneShotMode(options: ReturnType<typeof parseArgs>) {
+  const { url, instruction, artifactsDir, headed, planner, model } = options;
   const startedAt = Date.now();
 
   // Validate inputs
@@ -77,14 +117,18 @@ async function oneShotMode(url: string, instruction: string, artifactsDir: strin
   console.log("\nAI Playwright");
   console.log(`Target:  ${url}`);
   console.log(`Task:    ${instruction}`);
+  console.log(`Planner: ${planner === "webllm" ? "WebLLM" : "Deterministic"}`);
+  if (planner === "webllm") {
+    console.log(`Model:   ${model ?? process.env.AIPW_WEBLLM_MODEL ?? "(default)"}`);
+  }
   console.log(`Browser: Obscura\n`);
 
   try {
-    // Launch browser with CliPlannerAdapter
     const browser = await aiPlaywright({
       browser: "obscura",
       headless: !headed,
-      planner: new CliPlannerAdapter(),
+      planner,
+      model: planner === "webllm" && model ? { provider: "webllm", model } : undefined,
       url,
       artifactsDir,
       limits: {
@@ -158,21 +202,23 @@ async function main() {
     process.exit(0);
   } else if (args[0] === "test") {
     // Workspace test mode
-    const testName: string | undefined = args.length > 1 ? args[1] : undefined;
-    await runTestCommand(testName, { workspaceDir: process.cwd() });
+    const { testName, planner, model, url } = parseWorkspaceTestArgs(args);
+    await runTestCommand(testName, {
+      workspaceDir: process.cwd(),
+      planner,
+      model: planner === "webllm" && model ? { provider: "webllm", model } : undefined,
+      url,
+    });
   } else if (args[0] === "ui") {
     // UI server mode
     const port = args[1] ? parseInt(args[1], 10) : 3001;
     await startUICommand(process.cwd(), port);
     // UI server runs indefinitely
+  } else if (args[0] === "run") {
+    await oneShotMode(parseArgs(args));
   } else if (args.includes("--url")) {
     // One-shot mode (backward compatibility with PR #8)
-    const { url, instruction, headed, artifactsDir } = parseArgs(args);
-    if (!url) {
-      console.error("Error: --url <URL> is required");
-      process.exit(1);
-    }
-    await oneShotMode(url, instruction, artifactsDir, headed);
+    await oneShotMode(parseArgs(["run", ...args]));
   } else {
     // Default: list tests or show help
     if (args[0] === "ls" || args[0] === "list" || args.length === 0) {
@@ -182,11 +228,11 @@ async function main() {
       console.error("Usage:");
       console.error("  npx ai-playwright init                                           # Initialize workspace");
       console.error(
-        "  npx ai-playwright test [name]                                   # Run test(s)"
+        "  npx ai-playwright test [name] [--planner webllm|deterministic]   # Run test(s)"
       );
       console.error("  npx ai-playwright ui [port]                                      # Start UI server");
       console.error(
-        "  npx ai-playwright --url http://localhost:3000 \"task\"            # One-shot mode"
+        "  npx ai-playwright run --url http://localhost:3000 \"task\"        # One-shot mode"
       );
       process.exit(1);
     }

@@ -32,7 +32,9 @@ export function createRun(
   testId: string,
   testName: string,
   url: string,
-  browser: string
+  browser: string,
+  planner?: string,
+  model?: string
 ): { runId: string; metadata: RunMetadata } {
   const runId = generateRunId();
   const now = Date.now();
@@ -42,6 +44,8 @@ export function createRun(
     testName,
     url,
     browser,
+    planner,
+    model,
     startedAt: now,
     status: "running",
   };

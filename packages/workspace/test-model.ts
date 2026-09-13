@@ -24,6 +24,8 @@ export type RunMetadata = {
   testName: string;
   url: string;
   browser: string;
+  planner?: string;
+  model?: string;
   startedAt: number;
   finishedAt?: number;
   status: "running" | "passed" | "failed" | "blocked";
