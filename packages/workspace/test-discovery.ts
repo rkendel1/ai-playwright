@@ -35,8 +35,23 @@ export async function discoverTests(testsDir: string): Promise<TestDefinition[]>
         try {
           const match = content.match(/export\s+default\s+({[\s\S]*?});/);
           if (match) {
-            const configStr = match[1]
-              .replace(/\/\/.*/g, "") // Remove comments
+            // Parse definition, handling URLs with //
+            let configStr = match[1];
+
+            // Remove line comments but preserve URLs with //
+            configStr = configStr
+              .split("\n")
+              .map((line) => {
+                const commentIndex = line.lastIndexOf("//");
+                if (commentIndex === -1) return line;
+                // Check if // is inside a string
+                const beforeComment = line.substring(0, commentIndex);
+                const stringCount = (beforeComment.match(/"/g) || []).length;
+                // If odd number of quotes, the // is inside a string
+                if (stringCount % 2 === 1) return line;
+                return beforeComment;
+              })
+              .join("\n")
               .replace(/,\s*}/g, "}"); // Remove trailing commas
 
             // Safe evaluation for simple object literals
