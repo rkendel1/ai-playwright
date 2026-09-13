@@ -5,6 +5,8 @@ import type { Planner } from "../core/planner.js";
 import type { TestDefinition } from "./test-model.js";
 import type { ModelConfig, ResolvedConfig } from "./config.js";
 import { createRun, updateRun, getRunEvidencePath } from "./run-storage.js";
+import { aggregateSuiteStatus, createSuiteRun, updateSuiteRun } from "./suite-storage.js";
+import type { SuiteRun, SuiteRunEntry } from "./test-model.js";
 
 /**
  * Test runner: thin wrapper around existing execution path
@@ -16,8 +18,12 @@ import { createRun, updateRun, getRunEvidencePath } from "./run-storage.js";
 export type RunResult = {
   runId: string;
   testId: string;
+  testName: string;
   status: "passed" | "failed" | "blocked";
   durationMs: number;
+  planner: string;
+  model?: string;
+  browser: string;
   taskResult?: unknown;
 };
 
@@ -79,8 +85,12 @@ export async function runTest(
     return {
       runId,
       testId: test.id,
+      testName: test.name,
       status: taskResult.status,
       durationMs,
+      planner: config.planner,
+      model,
+      browser: config.browser,
       taskResult,
     };
   } catch (error) {
@@ -96,22 +106,60 @@ export async function runTest(
     return {
       runId,
       testId: test.id,
+      testName: test.name,
       status: "failed",
       durationMs,
+      planner: config.planner,
+      model,
+      browser: config.browser,
     };
   }
 }
 
 export async function runTests(
   tests: TestDefinition[],
-  config: ResolvedConfig
+  config: ResolvedConfig,
+  runOne: (test: TestDefinition, config: ResolvedConfig) => Promise<RunResult> = runTest
 ): Promise<RunResult[]> {
   const results: RunResult[] = [];
 
   for (const test of tests) {
-    const result = await runTest(test, config);
+    const result = await runOne(test, config);
     results.push(result);
   }
 
   return results;
+}
+
+export async function runSuite(
+  tests: TestDefinition[],
+  config: ResolvedConfig,
+  options: { runOne?: (test: TestDefinition, config: ResolvedConfig) => Promise<RunResult> } = {}
+): Promise<SuiteRun> {
+  const suiteRun = createSuiteRun(config.artifacts);
+  const runOne = options.runOne ?? runTest;
+  const entries: SuiteRunEntry[] = [];
+
+  for (const test of tests) {
+    const result = await runOne(test, config);
+    entries.push({
+      testId: result.testId,
+      testName: result.testName,
+      runId: result.runId,
+      status: result.status,
+      durationMs: result.durationMs,
+      planner: result.planner,
+      model: result.model,
+      browser: result.browser,
+    });
+
+    updateSuiteRun(config.artifacts, suiteRun.id, {
+      tests: entries,
+    });
+  }
+
+  return updateSuiteRun(config.artifacts, suiteRun.id, {
+    status: aggregateSuiteStatus(entries),
+    tests: entries,
+  });
 }

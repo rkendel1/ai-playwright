@@ -4,8 +4,11 @@ import {
   resolveConfig,
   discoverTests,
   runTest,
+  runSuite,
   listRuns,
   loadRun,
+  listSuiteRuns,
+  loadSuiteRun,
   createTest,
   updateTest,
   deleteTest,
@@ -87,7 +90,7 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
         res.end(JSON.stringify(testsWithStatus));
       } catch (error) {
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: String(error) }));
+        res.end(JSON.stringify({ error: "Unable to load suite runs" }));
       }
       return;
     }
@@ -138,7 +141,7 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
         }));
       } catch (error) {
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: String(error) }));
+        res.end(JSON.stringify({ error: "Unable to load suite runs" }));
       }
       return;
     }
@@ -190,9 +193,9 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
 
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(runs));
-      } catch (error) {
+      } catch {
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: String(error) }));
+        res.end(JSON.stringify({ error: "Unable to load suite runs" }));
       }
       return;
     }
@@ -207,6 +210,52 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
       } catch (error) {
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Run not found" }));
+      }
+      return;
+    }
+
+    // API: Get suite run history
+    if (pathname === "/api/suite-runs" && req.method === "GET") {
+      try {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(listSuiteRuns(currentConfig.artifacts)));
+      } catch {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Unable to run suite" }));
+      }
+      return;
+    }
+
+    // API: Get single suite run
+    if (pathname && pathname.startsWith("/api/suite-runs/") && req.method === "GET") {
+      try {
+        const suiteRunId = pathname.split("/")[3];
+        const suiteRun = loadSuiteRun(currentConfig.artifacts, suiteRunId);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(suiteRun));
+      } catch (error) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Suite run not found" }));
+      }
+      return;
+    }
+
+    // API: Run full suite
+    if (pathname === "/api/suite/run" && req.method === "POST") {
+      try {
+        currentTests = await discoverTests(currentConfig.tests);
+        if (currentTests.length === 0) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "No tests found" }));
+          return;
+        }
+
+        const suiteRun = await runSuite(currentTests, currentConfig);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(suiteRun));
+      } catch {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Unable to run suite" }));
       }
       return;
     }
@@ -277,6 +326,10 @@ function getUIHTML(): string {
     .run-button { background: #2196F3; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; }
     .run-button:hover { background: #1976D2; }
     .run-button:disabled { background: #ccc; cursor: not-allowed; }
+    .suite-run { padding: 8px 0; border-bottom: 1px solid #e0e0e0; cursor: pointer; font-size: 13px; }
+    .suite-run:hover { background: #f9f9f9; }
+    .suite-test { padding: 10px 0; border-bottom: 1px solid #e0e0e0; cursor: pointer; }
+    .suite-test:hover { background: #f9f9f9; }
     .info-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #e0e0e0; }
     .info-label { color: #666; font-weight: 500; }
     .info-value { color: #333; }
@@ -295,8 +348,15 @@ function getUIHTML(): string {
 
     <div class="content">
       <div class="tests-panel">
-        <div class="section-title">Tests</div>
+        <div class="section-title">Test Suite</div>
+        <button class="run-button" id="run-all-button" style="width: 100%; margin-bottom: 12px;" onclick="runSuite()">
+          Run All Tests
+        </button>
         <div id="tests-list" class="empty loading">Loading...</div>
+        <div class="section">
+          <div class="section-title">Suite Runs</div>
+          <div id="suite-runs-list" class="empty loading">Loading...</div>
+        </div>
       </div>
 
       <div class="result-panel">
@@ -307,18 +367,31 @@ function getUIHTML(): string {
 
   <script>
     let tests = [];
+    let suiteRuns = [];
     let selectedTest = null;
     let isRunning = false;
-    let currentView = 'test'; // 'test' or 'run'
+    let currentView = 'test'; // 'test', 'run', or 'suite'
     let selectedRun = null;
+    let selectedSuiteRun = null;
 
     async function loadTests() {
       try {
         const response = await fetch('/api/tests');
         tests = await response.json();
         renderTests();
+        await loadSuiteRuns();
       } catch (error) {
         document.getElementById('tests-list').innerHTML = '<div class="empty">Error loading tests</div>';
+      }
+    }
+
+    async function loadSuiteRuns() {
+      try {
+        const response = await fetch('/api/suite-runs');
+        suiteRuns = await response.json();
+        renderSuiteRuns();
+      } catch (error) {
+        document.getElementById('suite-runs-list').innerHTML = '<div class="empty">Error loading suite runs</div>';
       }
     }
 
@@ -329,7 +402,8 @@ function getUIHTML(): string {
         return;
       }
 
-      list.innerHTML = '<button class="run-button" style="width: 100%; margin-bottom: 12px;" onclick="showNewTestForm()">+ New Test</button>' +
+      list.innerHTML = \`<div class="test-status">\${tests.length} tests</div>\` +
+        '<button class="run-button" style="width: 100%; margin: 12px 0;" onclick="showNewTestForm()">+ New Test</button>' +
         tests.map(test => \`
         <div class="test-item \${selectedTest?.id === test.id ? 'active' : ''} \${test.status}" onclick="selectTest('\${test.id}')">
           <div class="test-name">\${test.name}</div>
@@ -338,10 +412,37 @@ function getUIHTML(): string {
       \`).join('');
     }
 
+    function renderSuiteRuns() {
+      const list = document.getElementById('suite-runs-list');
+      if (!list) return;
+      if (suiteRuns.length === 0) {
+        list.innerHTML = '<div class="empty">No suite runs yet</div>';
+        return;
+      }
+
+      list.innerHTML = suiteRuns.slice(0, 10).map(run => \`
+        <div class="suite-run" onclick="selectSuiteRun('\${run.id}')">
+          <strong>\${run.status.toUpperCase()}</strong>
+          <span style="float: right;">\${run.durationMs ? (run.durationMs / 1000).toFixed(1) + 's' : '?'}</span>
+          <div class="test-status">\${run.finishedAt ? new Date(run.finishedAt).toLocaleString() : 'Running'}</div>
+        </div>
+      \`).join('');
+    }
+
     function selectTest(testId) {
       selectedTest = tests.find(t => t.id === testId);
       currentView = 'test';
       selectedRun = null;
+      selectedSuiteRun = null;
+      renderTests();
+      renderResult();
+    }
+
+    function selectSuiteRun(suiteRunId) {
+      selectedSuiteRun = suiteRuns.find(run => run.id === suiteRunId);
+      selectedTest = null;
+      selectedRun = null;
+      currentView = 'suite';
       renderTests();
       renderResult();
     }
@@ -431,6 +532,11 @@ function getUIHTML(): string {
     }
 
     function renderResult() {
+      if (currentView === 'suite' && selectedSuiteRun) {
+        renderSuiteDetail();
+        return;
+      }
+
       if (!selectedTest) {
         document.getElementById('result-content').innerHTML = '<div class="empty">Select a test to view details</div>';
         return;
@@ -553,7 +659,7 @@ function getUIHTML(): string {
         section.innerHTML = \`
           <div class="section-title">Run History</div>
           \${runs.slice(0, 5).map((run, i) => \`
-            <div class="info-row" style="cursor: pointer;" onclick="viewRun('\${run.testId}', '\${run.startedAt}')">
+            <div class="info-row" style="cursor: pointer;" onclick="viewRun('\${run.id}')">
               <span class="info-label">\${i === 0 ? 'Latest' : 'Run ' + (i + 1)}</span>
               <span class="info-value">\${run.status === 'passed' ? '✅' : run.status === 'failed' ? '❌' : '⊘'} \${new Date(run.finishedAt).toLocaleString()}</span>
             </div>
@@ -562,17 +668,108 @@ function getUIHTML(): string {
       });
     }
 
-    function renderRunDetail() {
-      if (!selectedRun) return;
-      // This would render the detailed run view - for now, go back to test view
-      currentView = 'test';
-      renderResult();
+    function statusIcon(status) {
+      return status === 'passed' ? '✓' : status === 'failed' ? '✗' : '⊘';
     }
 
-    function viewRun(testId, timestamp) {
-      // For now, just show the test view - run details are shown in failure section
-      currentView = 'test';
-      renderResult();
+    function plannerLabel(planner) {
+      return planner === 'webllm' ? 'WebLLM' : 'Deterministic';
+    }
+
+    function renderSuiteDetail() {
+      const passed = selectedSuiteRun.tests.filter(test => test.status === 'passed').length;
+      const failed = selectedSuiteRun.tests.filter(test => test.status === 'failed').length;
+      const blocked = selectedSuiteRun.tests.filter(test => test.status === 'blocked').length;
+
+      document.getElementById('result-content').innerHTML = \`
+        <div class="result-header">
+          <div>
+            <div class="test-name">Test Suite</div>
+            <div class="test-status">\${selectedSuiteRun.tests.length} tests · \${selectedSuiteRun.id}</div>
+          </div>
+          <div class="status-badge \${selectedSuiteRun.status === 'passed' ? 'pass' : selectedSuiteRun.status === 'failed' ? 'fail' : 'blocked'}">
+            \${selectedSuiteRun.status.toUpperCase()}
+          </div>
+        </div>
+
+        <div class="section">
+          \${selectedSuiteRun.tests.map(test => \`
+            <div class="suite-test" onclick="viewRunById('\${test.runId}')">
+              <div class="test-name">\${statusIcon(test.status)} \${test.testName}</div>
+              <div class="test-status">
+                \${test.status.toUpperCase()} · Planner: \${plannerLabel(test.planner)} · Browser: \${test.browser === 'obscura' ? 'Obscura' : test.browser}
+              </div>
+            </div>
+          \`).join('')}
+        </div>
+
+        <div class="section">
+          <div class="section-title">Summary</div>
+          <div class="info-row"><span class="info-label">Passed</span><span class="info-value">\${passed}</span></div>
+          <div class="info-row"><span class="info-label">Failed</span><span class="info-value">\${failed}</span></div>
+          <div class="info-row"><span class="info-label">Blocked</span><span class="info-value">\${blocked}</span></div>
+          <div class="info-row"><span class="info-label">Result</span><span class="info-value">\${selectedSuiteRun.status.toUpperCase()}</span></div>
+        </div>
+      \`;
+    }
+
+    function renderRunDetail() {
+      if (!selectedRun) return;
+
+      const statusEmoji = { passed: '✅', failed: '❌', blocked: '⊘', running: '⏳' }[selectedRun.status] || '◯';
+      const durationSec = selectedRun.durationMs ? (selectedRun.durationMs / 1000).toFixed(1) : '?';
+      const f = selectedRun.failure;
+      const failureHtml = f ? \`
+        <div class="section">
+          <div class="section-title">Failure Details</div>
+          <div class="info-row"><span class="info-label">Phase</span><span class="info-value">\${f.phase}</span></div>
+          <div class="info-row"><span class="info-label">Category</span><span class="info-value">\${f.category}</span></div>
+          \${f.step !== undefined ? \`<div class="info-row"><span class="info-label">Step</span><span class="info-value">\${f.step}</span></div>\` : ''}
+          \${f.action ? \`<div class="info-row"><span class="info-label">Action</span><span class="info-value">\${f.action.description || f.action.type}</span></div>\` : ''}
+          <div class="info-row"><span class="info-label">Error</span><span class="info-value error">\${f.message}</span></div>
+        </div>
+      \` : '';
+
+      document.getElementById('result-content').innerHTML = \`
+        <div class="result-header">
+          <div>
+            <div class="test-name">\${selectedRun.testName}</div>
+            <div class="test-status">Run: \${selectedRun.id}</div>
+          </div>
+          <button class="run-button" style="background: #666;" onclick="selectTest('\${selectedRun.testId}')">Back to Test</button>
+        </div>
+        <div class="section">
+          <div class="section-title">Run Details</div>
+          <div class="info-row"><span class="info-label">Status</span><span class="info-value">\${statusEmoji} \${selectedRun.status.toUpperCase()}</span></div>
+          <div class="info-row"><span class="info-label">Duration</span><span class="info-value">\${durationSec}s</span></div>
+          <div class="info-row"><span class="info-label">Planner</span><span class="info-value">\${plannerLabel(selectedRun.planner)}</span></div>
+          <div class="info-row"><span class="info-label">Browser</span><span class="info-value">\${selectedRun.browser === 'obscura' ? 'Obscura' : selectedRun.browser}</span></div>
+          <div class="info-row"><span class="info-label">Evidence</span><span class="info-value">\${selectedRun.evidence || '(none)'}</span></div>
+        </div>
+        \${failureHtml}
+      \`;
+    }
+
+    async function viewRunById(runId) {
+      try {
+        const response = await fetch(\`/api/runs/\${runId}\`);
+        selectedRun = await response.json();
+        if (!response.ok) {
+          alert('Error loading run: ' + selectedRun.error);
+          return;
+        }
+        selectedTest = tests.find(test => test.id === selectedRun.testId) || null;
+        selectedSuiteRun = null;
+        currentView = 'run';
+        renderTests();
+        renderResult();
+      } catch (error) {
+        alert('Error loading run: ' + error);
+      }
+    }
+
+    function viewRun(runId) {
+      viewRunById(runId);
     }
 
     async function runTest() {
@@ -596,6 +793,34 @@ function getUIHTML(): string {
       } finally {
         isRunning = false;
         document.querySelectorAll('.run-button').forEach(btn => btn.disabled = false);
+      }
+
+      async function runSuite() {
+        if (isRunning) return;
+
+        isRunning = true;
+        document.querySelectorAll('.run-button').forEach(btn => btn.disabled = true);
+
+        try {
+          const response = await fetch('/api/suite/run', { method: 'POST' });
+          const result = await response.json();
+          if (!response.ok) {
+            alert('Error running suite: ' + result.error);
+            return;
+          }
+
+          selectedSuiteRun = result;
+          currentView = 'suite';
+          selectedTest = null;
+          await loadTests();
+          await loadSuiteRuns();
+          renderResult();
+        } catch (error) {
+          alert('Error running suite: ' + error);
+        } finally {
+          isRunning = false;
+          document.querySelectorAll('.run-button').forEach(btn => btn.disabled = false);
+        }
       }
     }
 

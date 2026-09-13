@@ -1,4 +1,5 @@
 import type { FailureDiagnosis } from "../workspace/failure-model.js";
+import type { SuiteRun, SuiteRunFinalStatus } from "../workspace/index.js";
 
 /**
  * Format test results for CLI output
@@ -103,6 +104,40 @@ export function formatRunSummary(results: Array<{
   if (passed > 0) output += `  ${passed} passed\n`;
   if (failed > 0) output += `  ${failed} failed\n`;
   if (blocked > 0) output += `  ${blocked} blocked\n`;
+
+  return output;
+}
+
+function suiteStatusLabel(status: SuiteRunFinalStatus): string {
+  return status.toUpperCase();
+}
+
+function suiteStatusIcon(status: SuiteRunFinalStatus): string {
+  if (status === "passed") return "✓";
+  if (status === "failed") return "✗";
+  return "⊘";
+}
+
+export function formatSuiteRun(suiteRun: SuiteRun): string {
+  const passed = suiteRun.tests.filter((test) => test.status === "passed").length;
+  const failed = suiteRun.tests.filter((test) => test.status === "failed").length;
+  const blocked = suiteRun.tests.filter((test) => test.status === "blocked").length;
+  const finalStatus = suiteRun.status === "running" ? "blocked" : suiteRun.status;
+
+  let output = "";
+  for (const test of suiteRun.tests) {
+    const name = test.testId.padEnd(22, " ");
+    const duration = `${(test.durationMs / 1000).toFixed(1)}s`;
+    output += `${suiteStatusIcon(test.status)} ${name} ${suiteStatusLabel(test.status).padEnd(7, " ")} ${duration}\n`;
+  }
+
+  output += "──────────────────────────────\n";
+  output += `${passed} passed\n`;
+  output += `${failed} failed\n`;
+  output += `${blocked} blocked\n`;
+  output += `${suiteStatusLabel(finalStatus)}\n`;
+  output += `Suite run:\n  ${suiteRun.id}\n`;
+  output += `Evidence:\n  ${suiteRun.evidence}\n`;
 
   return output;
 }
