@@ -90,7 +90,7 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
         res.end(JSON.stringify(testsWithStatus));
       } catch (error) {
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: String(error) }));
+        res.end(JSON.stringify({ error: "Unable to load suite runs" }));
       }
       return;
     }
@@ -141,7 +141,7 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
         }));
       } catch (error) {
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: String(error) }));
+        res.end(JSON.stringify({ error: "Unable to run suite" }));
       }
       return;
     }
