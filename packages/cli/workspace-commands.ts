@@ -10,6 +10,7 @@ import {
   listRuns,
   getLatestRun,
 } from "../workspace/index.js";
+import { startUIServer } from "../workspace/ui-server.js";
 import type { TestDefinition } from "../workspace/index.js";
 
 /**
@@ -127,4 +128,9 @@ export async function listTestsCommand(workspaceDir?: string): Promise<void> {
       : "-";
     console.log(`  ${status} ${test.name}`);
   }
+}
+
+export async function startUICommand(workspaceDir?: string, port: number = 3001): Promise<void> {
+  const dir = workspaceDir || process.cwd();
+  await startUIServer(dir, port);
 }

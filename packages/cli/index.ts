@@ -5,7 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { aiPlaywright } from "../core/index.js";
 import { CliPlannerAdapter } from "./adapters/CliPlannerAdapter.js";
-import { initWorkspace, runTestCommand, listTestsCommand } from "./workspace-commands.js";
+import { initWorkspace, runTestCommand, listTestsCommand, startUICommand } from "./workspace-commands.js";
 
 /**
  * AI Playwright CLI — PR #9 Workspace
@@ -160,6 +160,11 @@ async function main() {
     // Workspace test mode
     const testName: string | undefined = args.length > 1 ? args[1] : undefined;
     await runTestCommand(testName, { workspaceDir: process.cwd() });
+  } else if (args[0] === "ui") {
+    // UI server mode
+    const port = args[1] ? parseInt(args[1], 10) : 3001;
+    await startUICommand(process.cwd(), port);
+    // UI server runs indefinitely
   } else if (args.includes("--url")) {
     // One-shot mode (backward compatibility with PR #8)
     const { url, instruction, headed, artifactsDir } = parseArgs(args);
@@ -175,6 +180,7 @@ async function main() {
       console.error(
         "  npx ai-playwright test [name]                                   # Run test(s)"
       );
+      console.error("  npx ai-playwright ui [port]                                      # Start UI server");
       console.error(
         "  npx ai-playwright --url http://localhost:3000 \"task\"            # One-shot mode"
       );
