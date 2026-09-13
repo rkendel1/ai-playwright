@@ -25,6 +25,35 @@ npx playwright install --with-deps chromium
 npm test
 ```
 
+## The AI Playwright Experience
+
+Start from a clean workspace:
+
+```bash
+npx ai-playwright init
+npx ai-playwright ui
+```
+
+Then the product flow is:
+
+Create test  
+↓  
+Run test  
+↓  
+AI plans browser actions  
+↓  
+Playwright executes against Obscura  
+↓  
+PASS / FAIL  
+↓  
+Inspect evidence  
+↓  
+Run the full suite  
+↓  
+Review saved history
+
+See the complete visual walkthrough in [`docs/CX-WALKTHROUGH.md`](./docs/CX-WALKTHROUGH.md).
+
 ### API
 
 ```ts

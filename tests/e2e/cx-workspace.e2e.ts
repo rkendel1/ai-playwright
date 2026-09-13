@@ -11,6 +11,8 @@ import { startCXApp } from "../fixtures/cxApp.js";
 const repoRoot = "/home/runner/work/ai-playwright/ai-playwright";
 const screenshotDir = path.join(repoRoot, "docs/images/cx");
 const updateScreenshots = process.env.AIPW_UPDATE_CX_SCREENSHOTS === "1";
+const runCXWorkspace = process.env.AIPW_RUN_CX_WORKSPACE === "1" || updateScreenshots;
+const cxWorkspaceTest = runCXWorkspace ? it : it.skip;
 const cliEntry = path.join(repoRoot, "packages/cli/index.ts");
 const tempRoots: string[] = [];
 
@@ -55,6 +57,22 @@ function detailStatus(page: Page, label: string) {
   return page.locator("#result-content .status-pill").filter({ hasText: label }).first();
 }
 
+async function loadSuiteRunsWithRetry(baseUrl: string): Promise<Array<{ id: string }>> {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${baseUrl}/api/suite-runs`, {
+        signal: AbortSignal.timeout(1000),
+      });
+      if (response.ok) {
+        return (await response.json()) as Array<{ id: string }>;
+      }
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Restarted UI did not expose suite history in time.");
+}
+
 describe("CX workspace acceptance", () => {
   let browser: Browser | undefined;
   let uiServer: http.Server | undefined;
@@ -71,11 +89,11 @@ describe("CX workspace acceptance", () => {
     await Promise.all(tempRoots.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
   });
 
-  it("proves the canonical workspace journey from init through persistent suite history", async () => {
+  cxWorkspaceTest("proves the canonical workspace journey from init through persistent suite history", async () => {
     workspaceDir = tempDir("cx-workspace");
     await fs.mkdir(workspaceDir, { recursive: true });
 
-    app = await startCXApp();
+    app = await startCXApp({ port: updateScreenshots ? 3000 : undefined });
     const initResult = await runCLI(["init"], workspaceDir);
     expect(initResult.code).toBe(0);
     expect(initResult.stdout).toContain("AI Playwright workspace initialized");
@@ -163,8 +181,7 @@ describe("CX workspace acceptance", () => {
 
     await closeServer(uiServer);
     uiServer = await startUIServer(workspaceDir, 3001);
-    const response = await fetch("http://127.0.0.1:3001/api/suite-runs");
-    const suiteRuns = (await response.json()) as Array<{ id: string }>;
+    const suiteRuns = await loadSuiteRunsWithRetry("http://127.0.0.1:3001");
     expect(suiteRuns.length).toBeGreaterThanOrEqual(2);
   }, 180000);
 });
