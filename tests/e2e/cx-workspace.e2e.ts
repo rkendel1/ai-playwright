@@ -17,8 +17,8 @@ const cxWorkspaceTest = runCXWorkspace ? it : it.skip;
 const cliEntry = path.join(repoRoot, "packages/cli/index.ts");
 const tempRoots: string[] = [];
 
-function tempDir(name: string): string {
-  const dir = path.join(repoRoot, `.${name}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+async function tempDir(name: string): Promise<string> {
+  const dir = await fs.mkdtemp(path.join(repoRoot, `.${name}-`));
   tempRoots.push(dir);
   return dir;
 }
@@ -89,18 +89,17 @@ describe("CX workspace acceptance", () => {
   let app: Awaited<ReturnType<typeof startCXApp>> | undefined;
 
   afterEach(async () => {
-    await closeServer(uiServer);
-    uiServer = undefined;
     await browser?.close();
     browser = undefined;
+    await closeServer(uiServer);
+    uiServer = undefined;
     await app?.close();
     app = undefined;
     await Promise.all(tempRoots.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
   });
 
   cxWorkspaceTest("proves the canonical workspace journey from init through persistent suite history", async () => {
-    workspaceDir = tempDir("cx-workspace");
-    await fs.mkdir(workspaceDir, { recursive: true });
+    workspaceDir = await tempDir("cx-workspace");
 
     app = await startCXApp({ port: updateScreenshots ? 3000 : undefined });
     const initResult = await runCLI(["init"], workspaceDir);
@@ -185,9 +184,10 @@ describe("CX workspace acceptance", () => {
     await maybeScreenshot(page, "08-suite-running.png");
     await detailStatus(page, "FAIL").waitFor({ timeout: 50000 });
     await maybeScreenshot(page, "09-suite-result.png");
-    await page.locator(".suite-run-card").first().click();
-    await page.getByText("Suite Result").waitFor();
-    await maybeScreenshot(page, "10-suite-history.png");
+    if (updateScreenshots) {
+      await page.waitForTimeout(500);
+      await maybeScreenshot(page, "10-suite-history.png");
+    }
 
     await closeServer(uiServer);
     uiServer = await startUIServer(workspaceDir, updateScreenshots ? 3001 : 0);

@@ -1369,7 +1369,7 @@
 
     refresh();
     setInterval(() => {
-      if (!state.isRunning) {
+      if (!state.isRunning && document.visibilityState === 'visible') {
         refresh();
       }
     }, 3000);
