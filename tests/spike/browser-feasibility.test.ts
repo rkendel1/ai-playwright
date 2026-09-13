@@ -48,9 +48,10 @@ describe("Browser-Local Feasibility Spike (PR #6)", () => {
   // Mock DOM for simulation
   const createMockDOM = () => {
     const projects: string[] = [];
+    const nameInput = { value: "", focus: () => {} };
     return {
       createBtn: { click: () => {} },
-      nameInput: { value: "", focus: () => {} },
+      nameInput,
       addBtn: {
         click: () => {
           if ((nameInput as any).value) {
@@ -60,7 +61,6 @@ describe("Browser-Local Feasibility Spike (PR #6)", () => {
       },
       projectsList: { projects },
       projects,
-      nameInput: { value: "" },
     };
   };
 

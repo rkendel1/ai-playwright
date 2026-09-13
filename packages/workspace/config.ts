@@ -1,12 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { parseExportDefaultObject } from "./simple-object.js";
+
+export type PlannerMode = "webllm" | "deterministic" | "mock";
+export type ModelConfig = "webllm" | { provider: "webllm"; model: string };
 
 export type WorkspaceConfig = {
   url?: string;
   browser?: "obscura";
   artifacts?: string;
   tests?: string;
+  planner?: PlannerMode;
+  model?: ModelConfig;
 };
 
 export type ConfigSource = "cli" | "workspace" | "default";
@@ -16,6 +21,8 @@ export type ResolvedConfig = {
   browser: "obscura";
   artifacts: string;
   tests: string;
+  planner: PlannerMode;
+  model?: ModelConfig;
   configPath?: string;
 };
 
@@ -24,7 +31,12 @@ const DEFAULTS: ResolvedConfig = {
   browser: "obscura",
   artifacts: "./artifacts",
   tests: "./tests",
+  planner: "deterministic",
 };
+
+function withoutUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as Partial<T>;
+}
 
 async function loadConfigFile(workspaceDir: string): Promise<WorkspaceConfig | null> {
   const possiblePaths = [
@@ -39,23 +51,10 @@ async function loadConfigFile(workspaceDir: string): Promise<WorkspaceConfig | n
         const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
         return { ...content, configPath };
       } else if (configPath.endsWith(".ts")) {
-        // For TS files, we'd need tsx to load them
-        // For now, return a marker that this file exists
         const content = fs.readFileSync(configPath, "utf-8");
-        // Try to extract config object by parsing
         try {
-          const match = content.match(/export\s+default\s+({[\s\S]*?});/);
-          if (match) {
-            // Very basic parsing - only works for simple object literals
-            const configStr = match[1]
-              .replace(/\/\/.*/g, "") // Remove comments
-              .replace(/,\s*}/g, "}"); // Remove trailing commas
-
-            // Safe evaluation for simple object literals
-            // eslint-disable-next-line no-eval
-            const config = Function('"use strict"; return (' + configStr + ")")();
-            return { ...config, configPath };
-          }
+          const config = parseExportDefaultObject(content);
+          if (config) return { ...config, configPath } as WorkspaceConfig;
         } catch {
           // Fall through to default
         }
@@ -81,8 +80,8 @@ export async function resolveConfig(
   const fileConfig = await loadConfigFile(workspaceDir);
   const config: ResolvedConfig = {
     ...DEFAULTS,
-    ...fileConfig,
-    ...overrides,
+    ...withoutUndefined(fileConfig ?? {}),
+    ...withoutUndefined(overrides ?? {}),
   };
 
   // Resolve relative paths from workspace dir
@@ -99,6 +98,7 @@ export async function resolveConfig(
 export function createDefaultConfig(workspaceDir: string): string {
   return `export default {
   url: "http://127.0.0.1:3000",
+  planner: "deterministic",
   browser: "obscura",
   artifacts: "./artifacts",
   tests: "./tests",

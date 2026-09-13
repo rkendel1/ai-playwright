@@ -1,6 +1,6 @@
 import { CreateMLCEngine, type MLCEngineInterface } from "@mlc-ai/web-llm";
 import { actionSchema, type BrowserAction } from "../core/actions.js";
-import type { Planner, PlannerInput } from "../core/planner.js";
+import type { Planner, PlannerInput, PlannerTrace } from "../core/planner.js";
 
 export type WebLLMPlannerOptions = {
   model?: string;
@@ -85,18 +85,21 @@ async function createDefaultEngine(model: string): Promise<MLCEngineInterface> {
   return CreateMLCEngine(model);
 }
 
-function userPrompt(input: PlannerInput): string {
-  return JSON.stringify({
+function plannerContractInput(input: PlannerInput): unknown {
+  return {
     task: input.task,
-    currentObservation: input.observation,
-    history: input.history.map((step) => ({
-      action: step.action,
-      validation: step.validation,
-      result: step.result,
-    })),
-    remainingSteps: input.remainingSteps,
-    defaultUrl: input.defaultUrl,
-  });
+    observation: {
+      id: input.observation.id,
+      url: input.observation.url,
+      title: input.observation.title,
+      elements: input.observation.elements,
+      text: input.observation.text,
+    },
+  };
+}
+
+function userPrompt(input: PlannerInput): string {
+  return JSON.stringify(plannerContractInput(input));
 }
 
 function parseModelJson(content: string): unknown {
@@ -107,10 +110,15 @@ function parseModelJson(content: string): unknown {
   }
 }
 
-export class WebLLMPlanner implements Planner {
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export class WebLLMPlannerAdapter implements Planner {
   readonly provider = "webllm";
   readonly model: string;
   private enginePromise?: Promise<MLCEngineInterface>;
+  private lastTrace?: PlannerTrace;
 
   constructor(options: WebLLMPlannerOptions | string = {}) {
     if (typeof options === "string") {
@@ -129,27 +137,95 @@ export class WebLLMPlanner implements Planner {
   private async getEngine(): Promise<MLCEngineInterface> {
     if (this.engine) return this.engine;
     this.enginePromise ??= this.engineFactory(this.model).catch((error) => {
-      throw new Error(`Failed to initialize WebLLM model '${this.model}': ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to initialize WebLLM model '${this.model}': ${errorMessage(error)}`);
     });
     return this.enginePromise;
   }
 
+  consumeTrace(): PlannerTrace | undefined {
+    const trace = this.lastTrace;
+    this.lastTrace = undefined;
+    return trace;
+  }
+
   async next(input: PlannerInput): Promise<BrowserAction> {
-    const engine = await this.getEngine();
-    const completion = await engine.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt() },
-        { role: "user", content: userPrompt(input) },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0,
-      max_tokens: 500,
-      extra_body: { enable_latency_breakdown: true },
-    });
+    const contractInput = plannerContractInput(input);
+    this.lastTrace = {
+      provider: this.provider,
+      model: this.model,
+      input: contractInput,
+    };
+
+    let engine: MLCEngineInterface;
+    try {
+      engine = await this.getEngine();
+    } catch (error) {
+      this.lastTrace = {
+        ...this.lastTrace,
+        error: errorMessage(error),
+      };
+      throw error;
+    }
+    const startedAt = Date.now();
+    let completion: Awaited<ReturnType<MLCEngineInterface["chat"]["completions"]["create"]>>;
+    try {
+      completion = await engine.chat.completions.create({
+        messages: [
+          { role: "system", content: systemPrompt() },
+          { role: "user", content: JSON.stringify(contractInput) },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0,
+        max_tokens: 500,
+        extra_body: { enable_latency_breakdown: true },
+      });
+    } catch (error) {
+      const message = `WebLLM inference failed: ${errorMessage(error)}`;
+      this.lastTrace = {
+        ...this.lastTrace,
+        inference: { durationMs: Date.now() - startedAt },
+        error: message,
+      };
+      throw new Error(message);
+    }
+
     const content = completion.choices[0]?.message.content;
     if (typeof content !== "string" || content.trim().length === 0) {
+      this.lastTrace = {
+        ...this.lastTrace,
+        rawOutput: content,
+        inference: { id: completion.id, durationMs: Date.now() - startedAt },
+        error: "WebLLM returned an empty BrowserAction response.",
+      };
       throw new Error("WebLLM returned an empty BrowserAction response.");
     }
-    return actionSchema.parse(parseModelJson(content)) as BrowserAction;
+    try {
+      const parsedAction = actionSchema.parse(parseModelJson(content)) as BrowserAction;
+      const usage = completion.usage;
+      this.lastTrace = {
+        ...this.lastTrace,
+        rawOutput: content,
+        parsedAction,
+        inference: {
+          id: completion.id,
+          durationMs: Date.now() - startedAt,
+          inputTokens: usage?.prompt_tokens,
+          outputTokens: usage?.completion_tokens,
+          totalTokens: usage?.total_tokens,
+        },
+      };
+      return parsedAction;
+    } catch (error) {
+      const message = errorMessage(error);
+      this.lastTrace = {
+        ...this.lastTrace,
+        rawOutput: content,
+        inference: { id: completion.id, durationMs: Date.now() - startedAt },
+        error: message,
+      };
+      throw error;
+    }
   }
 }
+
+export class WebLLMPlanner extends WebLLMPlannerAdapter {}

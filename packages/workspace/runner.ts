@@ -1,7 +1,9 @@
 import { aiPlaywright } from "../core/index.js";
 import { CliPlannerAdapter } from "../cli/adapters/CliPlannerAdapter.js";
+import { WebLLMPlannerAdapter } from "../webllm/planner.js";
+import type { Planner } from "../core/planner.js";
 import type { TestDefinition } from "./test-model.js";
-import type { ResolvedConfig } from "./config.js";
+import type { ModelConfig, ResolvedConfig } from "./config.js";
 import { createRun, updateRun, getRunEvidencePath } from "./run-storage.js";
 
 /**
@@ -19,15 +21,32 @@ export type RunResult = {
   taskResult?: unknown;
 };
 
+function modelName(model: ModelConfig | undefined): string | undefined {
+  if (!model || model === "webllm") return undefined;
+  return model.model;
+}
+
+function createPlanner(config: ResolvedConfig): Planner {
+  if (config.planner === "webllm") {
+    return new WebLLMPlannerAdapter({ model: modelName(config.model) });
+  }
+  if (config.planner === "deterministic" || config.planner === "mock") {
+    return new CliPlannerAdapter();
+  }
+  throw new Error(`Unsupported planner '${config.planner}'.`);
+}
+
 export async function runTest(
   test: TestDefinition,
   config: ResolvedConfig
 ): Promise<RunResult> {
   const url = test.url || config.url;
   const evidencePath = getRunEvidencePath(config.artifacts, "current");
+  const planner = createPlanner(config);
+  const model = config.planner === "webllm" ? modelName(config.model) : undefined;
 
   // Create run record
-  const { runId } = createRun(config.artifacts, test.id, test.name, url, config.browser);
+  const { runId } = createRun(config.artifacts, test.id, test.name, url, config.browser, config.planner, model);
 
   const startedAt = Date.now();
 
@@ -36,7 +55,7 @@ export async function runTest(
     const browser = await aiPlaywright({
       browser: config.browser,
       headless: true,
-      planner: new CliPlannerAdapter(),
+      planner,
       url,
       artifactsDir: getRunEvidencePath(config.artifacts, runId),
       limits: {

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { TestDefinition } from "./test-model.js";
+import { parseExportDefaultObject } from "./simple-object.js";
 
 /**
  * Test management: create, update, delete test files
@@ -65,39 +66,17 @@ export function updateTest(
 
   // Read current definition
   const content = fs.readFileSync(filePath, "utf-8");
-  const match = content.match(/export\s+default\s+({[\s\S]*?});/);
-  if (!match) {
+  const current = parseExportDefaultObject(content);
+  if (!current) {
     throw new Error(`Invalid test file format for "${testId}"`);
   }
 
-  // Parse current definition
-  let configStr = match[1];
-
-  // Remove line comments but preserve URLs with //
-  configStr = configStr
-    .split("\n")
-    .map((line) => {
-      const commentIndex = line.lastIndexOf("//");
-      if (commentIndex === -1) return line;
-      // Check if // is inside a string
-      const beforeComment = line.substring(0, commentIndex);
-      const stringCount = (beforeComment.match(/"/g) || []).length;
-      // If odd number of quotes, the // is inside a string
-      if (stringCount % 2 === 1) return line;
-      return beforeComment;
-    })
-    .join("\n")
-    .replace(/,\s*}/g, "}"); // Remove trailing commas
-
-  // eslint-disable-next-line no-eval
-  const current = Function('"use strict"; return (' + configStr + ")")();
-
   // Merge updates
   const updated = {
-    id: current.id || testId,
-    name: updates.name ?? current.name,
-    task: updates.task ?? current.task,
-    url: updates.url ?? current.url,
+    id: typeof current.id === "string" ? current.id : testId,
+    name: updates.name ?? (typeof current.name === "string" ? current.name : testId),
+    task: updates.task ?? (typeof current.task === "string" ? current.task : ""),
+    url: updates.url ?? (typeof current.url === "string" ? current.url : undefined),
   };
 
   // Write updated file
@@ -136,39 +115,14 @@ export function getTest(
   }
 
   const content = fs.readFileSync(filePath, "utf-8");
-  const match = content.match(/export\s+default\s+({[\s\S]*?});/);
-
-  if (!match) {
-    return null;
-  }
-
-  // Parse current definition, handling URLs with //
-  let configStr = match[1];
-
-  // Remove line comments but preserve URLs with //
-  configStr = configStr
-    .split("\n")
-    .map((line) => {
-      const commentIndex = line.lastIndexOf("//");
-      if (commentIndex === -1) return line;
-      // Check if // is inside a string
-      const beforeComment = line.substring(0, commentIndex);
-      const stringCount = (beforeComment.match(/"/g) || []).length;
-      // If odd number of quotes, the // is inside a string
-      if (stringCount % 2 === 1) return line;
-      return beforeComment;
-    })
-    .join("\n")
-    .replace(/,\s*}/g, "}");
-
   try {
-    // eslint-disable-next-line no-eval
-    const def = Function('"use strict"; return (' + configStr + ")")();
+    const def = parseExportDefaultObject(content);
+    if (!def) return null;
     return {
-      id: def.id || testId,
-      name: def.name,
-      task: def.task,
-      url: def.url,
+      id: typeof def.id === "string" ? def.id : testId,
+      name: typeof def.name === "string" ? def.name : testId,
+      task: typeof def.task === "string" ? def.task : "",
+      url: typeof def.url === "string" ? def.url : undefined,
     };
   } catch {
     return null;

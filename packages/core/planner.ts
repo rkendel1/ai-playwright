@@ -10,10 +10,28 @@ export type PlannerInput = {
   defaultUrl?: string;
 };
 
+export type PlannerTrace = {
+  provider: string;
+  model?: string;
+  input?: unknown;
+  rawOutput?: unknown;
+  parsedAction?: unknown;
+  inference?: {
+    id?: string;
+    durationMs?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  };
+  error?: string;
+};
+
 export interface Planner {
   readonly provider?: string;
+  readonly model?: string;
   next(input: PlannerInput): Promise<BrowserAction>;
   plan?(input: Omit<PlannerInput, "history" | "remainingSteps">): Promise<BrowserAction[]>;
+  consumeTrace?(): PlannerTrace | undefined;
 }
 
 export function parseProjectName(task: string): string {

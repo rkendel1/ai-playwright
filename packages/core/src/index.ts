@@ -13,6 +13,7 @@ export {
   type StepTelemetry,
   type Evidence,
   type ElementObservation,
+  type ElementState,
   type Target,
   type Assertion,
   type ActionRisk,

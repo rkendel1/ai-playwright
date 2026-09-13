@@ -7,16 +7,22 @@ describe("CLI parseArgs", () => {
     expect(parsed).toEqual({
       url: "http://localhost:3000",
       planner: "webllm",
+      model: undefined,
       instruction: "Create Demo",
+      headed: false,
+      artifactsDir: expect.stringContaining(".ai-playwright-results"),
     });
   });
 
-  it("parses explicit mock planner", () => {
-    const parsed = parseArgs(["run", "--planner", "mock", "--url", "http://localhost:3000", "Create", "Demo"]);
+  it("parses explicit deterministic planner", () => {
+    const parsed = parseArgs(["run", "--planner", "deterministic", "--url", "http://localhost:3000", "Create", "Demo"]);
     expect(parsed).toEqual({
       url: "http://localhost:3000",
-      planner: "mock",
+      planner: "deterministic",
+      model: undefined,
       instruction: "Create Demo",
+      headed: false,
+      artifactsDir: expect.stringContaining(".ai-playwright-results"),
     });
   });
 

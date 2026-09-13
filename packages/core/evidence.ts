@@ -30,6 +30,22 @@ export type StepTelemetry = {
   outputTokens: number;
 };
 
+export type StepPlannerTrace = {
+  provider: string;
+  model?: string;
+  input?: unknown;
+  rawOutput?: unknown;
+  parsedAction?: unknown;
+  inference?: {
+    id?: string;
+    durationMs?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  };
+  error?: string;
+};
+
 export type Step = {
   index: number;
   observation: unknown;
@@ -38,6 +54,7 @@ export type Step = {
   result: StepResult;
   timestamp: number;
   telemetry?: StepTelemetry;
+  planner?: StepPlannerTrace;
 };
 
 export type TaskResult = {

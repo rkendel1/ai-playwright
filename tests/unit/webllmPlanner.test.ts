@@ -33,6 +33,25 @@ describe("WebLLMPlanner", () => {
 
     expect(action).toEqual({ type: "click", target: { observationId: "obs-1", elementId: "e1" }, reason: "The visible button creates a project.", confidence: 0.91, risk: "write" });
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ response_format: { type: "json_object" }, temperature: 0 }));
+    expect(create.mock.calls[0][0].messages[1].content).toBe(JSON.stringify({
+      task: "Create a project named Demo",
+      observation: {
+        id: "obs-1",
+        url: "http://localhost:3000/",
+        title: "Projects",
+        elements: [{ id: "e1", role: "button", name: "New Project", state: { visible: true, enabled: true } }],
+        text: "Projects\nNew Project",
+      },
+    }));
+    expect(planner.consumeTrace()).toMatchObject({
+      provider: "webllm",
+      model: "test-model",
+      rawOutput: expect.stringContaining('"type":"click"'),
+      parsedAction: action,
+      inference: {
+        durationMs: expect.any(Number),
+      },
+    });
   });
 
   it("fails clearly when WebLLM cannot initialize", async () => {
@@ -42,6 +61,11 @@ describe("WebLLMPlanner", () => {
     });
 
     await expect(planner.next(input())).rejects.toThrow("Failed to initialize WebLLM model 'missing-model': no webgpu");
+    expect(planner.consumeTrace()).toMatchObject({
+      provider: "webllm",
+      model: "missing-model",
+      error: "Failed to initialize WebLLM model 'missing-model': no webgpu",
+    });
   });
 
   it("rejects invalid structured output", async () => {

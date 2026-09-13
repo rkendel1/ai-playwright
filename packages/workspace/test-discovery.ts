@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { TestDefinition } from "./test-model.js";
+import { parseExportDefaultObject } from "./simple-object.js";
 
 /**
  * Simple test discovery:
@@ -35,34 +36,14 @@ export async function discoverTests(testsDir: string): Promise<TestDefinition[]>
         try {
           const match = content.match(/export\s+default\s+({[\s\S]*?});/);
           if (match) {
-            // Parse definition, handling URLs with //
-            let configStr = match[1];
-
-            // Remove line comments but preserve URLs with //
-            configStr = configStr
-              .split("\n")
-              .map((line) => {
-                const commentIndex = line.lastIndexOf("//");
-                if (commentIndex === -1) return line;
-                // Check if // is inside a string
-                const beforeComment = line.substring(0, commentIndex);
-                const stringCount = (beforeComment.match(/"/g) || []).length;
-                // If odd number of quotes, the // is inside a string
-                if (stringCount % 2 === 1) return line;
-                return beforeComment;
-              })
-              .join("\n")
-              .replace(/,\s*}/g, "}"); // Remove trailing commas
-
-            // Safe evaluation for simple object literals
-            // eslint-disable-next-line no-eval
-            const testDef = Function('"use strict"; return (' + configStr + ")")();
+            const testDef = parseExportDefaultObject(content);
+            if (!testDef) continue;
 
             tests.push({
               id,
-              name: testDef.name || id,
-              task: testDef.task,
-              url: testDef.url,
+              name: typeof testDef.name === "string" ? testDef.name : id,
+              task: typeof testDef.task === "string" ? testDef.task : "",
+              url: typeof testDef.url === "string" ? testDef.url : undefined,
             });
           }
         } catch {
