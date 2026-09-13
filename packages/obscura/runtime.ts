@@ -12,6 +12,21 @@ export type ObscuraRuntimeOptions = {
   fallbackToPlaywrightChromium?: boolean;
 };
 
+export type ObscuraLaunchInfo =
+  | {
+      browser: "obscura";
+      cdpEndpoint: string;
+      cdpConnected: true;
+      fallbackUsed: false;
+    }
+  | {
+      browser: "playwright-chromium";
+      cdpEndpoint?: string;
+      cdpConnected: false;
+      fallbackUsed: true;
+      fallbackReason: string;
+    };
+
 async function findOpenPort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
@@ -62,11 +77,16 @@ export class ObscuraRuntime implements BrowserRuntime {
   private context?: BrowserContext;
   private runtimePage?: Page;
   private obscuraProcess?: ChildProcessWithoutNullStreams;
+  private lastLaunchInfo?: ObscuraLaunchInfo;
 
   constructor(
     private readonly headless = true,
     private readonly options: ObscuraRuntimeOptions = {},
   ) {}
+
+  launchInfo(): ObscuraLaunchInfo | undefined {
+    return this.lastLaunchInfo;
+  }
 
   async launch(): Promise<{ browser: Browser; context: BrowserContext; page: Page }> {
     const command = this.options.obscuraCommand ?? "obscura";
@@ -88,7 +108,14 @@ export class ObscuraRuntime implements BrowserRuntime {
         // handled by waitForCdp timeout and fallback path
       });
       await waitForCdp(port);
-      this.browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+      const cdpEndpoint = `http://127.0.0.1:${port}`;
+      this.browser = await chromium.connectOverCDP(cdpEndpoint);
+      this.lastLaunchInfo = {
+        browser: "obscura",
+        cdpEndpoint,
+        cdpConnected: true,
+        fallbackUsed: false,
+      };
     } catch (error) {
       if (this.obscuraProcess && !this.obscuraProcess.killed) {
         this.obscuraProcess.kill("SIGTERM");
@@ -104,6 +131,12 @@ export class ObscuraRuntime implements BrowserRuntime {
         throw new Error(`Failed to launch Obscura via '${command}': ${message}`);
       }
       this.browser = await chromium.launch({ headless: this.headless });
+      this.lastLaunchInfo = {
+        browser: "playwright-chromium",
+        cdpConnected: false,
+        fallbackUsed: true,
+        fallbackReason: message,
+      };
     }
 
     this.context = this.browser.contexts()[0] ?? (await this.browser.newContext());
