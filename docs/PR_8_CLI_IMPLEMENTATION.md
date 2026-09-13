@@ -2,19 +2,30 @@
 
 ## Objective
 
-Implement the smallest vertical slice that proves the CLI works end-to-end with a real developer executing:
+Implement the CLI vertical slice that proves browser-based automation works end-to-end for the developer:
 
 ```bash
-$ npx ai-playwright --url http://localhost:3000 "test checkout"
+$ npx ai-playwright --url http://127.0.0.1:3000 "test checkout"
 ```
 
-Expected output:
+Expected experience:
 ```
-✅ PASSED (4.2s)
+AI Playwright
+Target:  http://127.0.0.1:3000
+Task:    test checkout
+Browser: Obscura
+
+✓ Navigate
+✓ Observe
+✓ Plan action
+✓ Execute
+✓ Assert
+
+PASS (4.2s)
 Evidence: .ai-playwright-results/task-abc123.json
 ```
 
-**Acceptance criterion:** Developer receives deterministic PASS/FAIL result + inspectable JSON trace, with no knowledge of Playwright, Obscura, or the kernel.
+**Acceptance criterion:** Developer runs CLI against local app and gets deterministic PASS/FAIL + inspectable evidence, without needing to know Playwright, CDP, or Obscura exist.
 
 ---
 
@@ -22,19 +33,21 @@ Evidence: .ai-playwright-results/task-abc123.json
 
 ### 1. CLI Entry Point
 - `packages/cli/index.ts` (real, executable code)
-- Argument parsing: `--url`, `--task`, optional `--model`
-- Browser launch (Playwright chromium, headless by default)
+- Argument parsing: `--url`, `--task`
+- Browser launch via **real Playwright + Obscura** (proven in PR #4)
 - Parse task from positional argument or `--task` flag
-- Call kernel.task() with Planner + BrowserExecutor
+- Call `aipw-core` kernel with deterministic Planner + real BrowserExecutor
 - Output result to console + JSON file
 
-### 2. Remote Planner Adapter
-- `packages/cli/adapters/remote-planner.ts`
+### 2. Planner Adapter (Deterministic for PR #8)
+- `packages/cli/adapters/planner.ts`
 - Implements `Planner` interface from `@aipw/core`
-- Maps external LLM (OpenAI, Anthropic, Groq, or mock) to kernel's `Planner.next()`
-- Minimal: Accept API key from environment variable
-- Default model: `gpt-4o-mini` (cost-effective for development)
-- Return `BrowserAction` unchanged
+- **PR #8 uses a deterministic/minimal planner** (not WebLLM, not remote LLM)
+  - Parse task as simple steps (navigate, click, fill, assert)
+  - Generate predictable action sequence
+  - Serve as proof-of-concept for adapter contract
+- **PR #9 will swap this with WebLLM** without changing CLI or kernel
+- Return `BrowserAction` matching kernel expectations
 
 ### 3. Result Formatter
 - `packages/cli/evidence-reporter.ts`
@@ -58,11 +71,16 @@ Evidence: .ai-playwright-results/task-abc123.json
 
 ## Scope: What PR #8 Does NOT Build
 
-### Explicitly Deferred
+### Explicitly Deferred to PR #9+
 
-❌ **WebLLM / Browser-Local**
-- Not in scope for PR #8
-- Requires separate adapter implementation (PR #9)
+❌ **Real Planner (WebLLM)**
+- PR #8 uses deterministic/minimal planner for proof-of-concept
+- PR #9 replaces planner with WebLLM (same CLI, same kernel, different adapter)
+- This keeps the progression clean and obvious
+
+❌ **Browser-Local Execution**
+- PR #8 proves CLI with real Playwright + Obscura (from PR #4)
+- Browser-local requires separate DOM adapter (PR #9-alt or later)
 
 ❌ **Capability Negotiation**
 - Not needed for MVP
@@ -201,24 +219,33 @@ docs/
 ## What Success Looks Like
 
 ```
-$ npx ai-playwright --url http://localhost:3000 "test checkout"
+$ npx ai-playwright --url http://127.0.0.1:3000 "test checkout"
 
-🚀 Launching browser...
-✓ Page loaded (Checkout Test App)
+AI Playwright
+Target:  http://127.0.0.1:3000
+Task:    test checkout
+Browser: Obscura
 
-⚙️  Running task...
-  Step 1: Navigate to /checkout
-  Step 2: Click "Add Item"
-  Step 3: Fill "email" field
-  Step 4: Assert "Order confirmed"
+✓ Observe page
+✓ Plan next step (navigate)
+✓ Execute (goto http://127.0.0.1:3000/checkout)
+✓ Observe page
+✓ Plan next step (click)
+✓ Execute (click Add Item)
+✓ Plan next step (fill)
+✓ Execute (fill email)
+✓ Plan next step (assert)
+✓ Assert "Order confirmed" ✓
 
-✅ PASSED (3.2s)
+PASSED (3.2s)
 
 Evidence: .ai-playwright-results/2026-09-13T15-45-30-123Z.json
 
 $ cat .ai-playwright-results/2026-09-13T15-45-30-123Z.json | jq .status
 "passed"
 ```
+
+**Key:** Developer doesn't need to know about Playwright, Obscura, or the kernel. Just runs CLI and gets PASS/FAIL.
 
 ---
 
@@ -261,24 +288,60 @@ The following are **not** PR #8 work. If they come up, defer to PR #9+:
 
 ---
 
+## Clean Progression: PR #8 → PR #9
+
+### PR #8 (This PR)
+```
+CLI
+  ↓
+parse --url + task
+  ↓
+Deterministic Planner (proof-of-concept)
+  ↓
+aipw-core Kernel
+  ↓
+Real Playwright + Obscura (from PR #4)
+  ↓
+Real browser at localhost:3000
+  ↓
+PASS/FAIL + evidence
+```
+
+### PR #9 (Next: Swap Planner)
+```
+CLI (unchanged)
+  ↓
+parse --url + task
+  ↓
+WebLLM Planner (replaces deterministic)
+  ↓
+aipw-core Kernel (unchanged)
+  ↓
+Real Playwright + Obscura (unchanged)
+  ↓
+Real browser at localhost:3000 (unchanged)
+  ↓
+PASS/FAIL + evidence (unchanged)
+```
+
+**Key insight:** PR #9 is just `packages/cli/adapters/planner.ts` using WebLLM instead of deterministic logic. Everything else stays the same. This keeps the progression obvious and prevents scope creep.
+
 ## Next Steps After PR #8
 
-### If CLI Dogfood Succeeds
+### If CLI Works
 - Merge PR #8
-- Celebrate proof of concept
-- Plan PR #9 based on real developer feedback
+- Prove proof-of-concept works
+- PR #9 swaps in WebLLM (single adapter change)
 
-### If CLI Exposes Friction
-- Document specific friction points
-- Audit whether they're contract issues (fix in kernel) or implementation issues (fix in CLI)
-- Don't add infrastructure speculatively
-- Resolve then continue
+### If CLI Exposes Architectural Friction
+- Document the exact friction
+- Audit whether it's a kernel contract issue or implementation issue
+- Stop and resolve before continuing (don't add workarounds)
+- Report findings; don't speculatively expand
 
 ### Future (PR #9+)
-- Browser-local adapter implementations (if still needed)
-- Performance optimizations
-- Extended action set (screenshot, network spy, etc.)
-- Integration with CI/CD systems
-- Multi-language task descriptions
+- PR #9: Real WebLLM planner (adapter swap only)
+- PR #10: Browser-local adapter (if still needed after dogfood)
+- PR #11+: Performance, extended actions, CI/CD integration
 
-But those are downstream decisions. PR #8 is about proving the core scenario works.
+But those are downstream. PR #8 is about proving the core CLI + real browser scenario works with deterministic logic.
