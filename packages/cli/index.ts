@@ -1,19 +1,29 @@
 #!/usr/bin/env node
 import { pathToFileURL } from "node:url";
-import { aiPlaywright } from "../core/index.js";
+import { aiPlaywright, type PlannerMode } from "../core/index.js";
 
 export function parseArgs(args: string[]) {
   const [command, ...rest] = args;
   if (command !== "run") {
-    throw new Error("Usage: aipw run [--url <url>] \"task instruction\"");
+    throw new Error('Usage: aipw run [--url <url>] [--planner webllm|mock] "task instruction"');
   }
 
   let url: string | undefined;
+  let planner: PlannerMode = "webllm";
   const instructionParts: string[] = [];
   for (let i = 0; i < rest.length; i += 1) {
     const token = rest[i];
     if (token === "--url") {
       url = rest[i + 1];
+      i += 1;
+      continue;
+    }
+    if (token === "--planner") {
+      const selected = rest[i + 1];
+      if (selected !== "webllm" && selected !== "mock") {
+        throw new Error("Planner must be 'webllm' or 'mock'.");
+      }
+      planner = selected;
       i += 1;
       continue;
     }
@@ -25,19 +35,20 @@ export function parseArgs(args: string[]) {
     throw new Error("Please provide a task instruction.");
   }
 
-  return { url, instruction };
+  return { url, planner, instruction };
 }
 
 async function main() {
   const startedAt = Date.now();
-  const { url, instruction } = parseArgs(process.argv.slice(2));
+  const { url, planner, instruction } = parseArgs(process.argv.slice(2));
 
   console.log("AI Playwright");
   console.log("Starting Obscura...");
-  console.log("Loading local model...");
+  console.log(planner === "webllm" ? "Loading local WebLLM model..." : "Using mock planner...");
 
   const browser = await aiPlaywright({
     browser: "obscura",
+    planner,
     model: "webllm",
     url,
   });
@@ -46,6 +57,7 @@ async function main() {
     const result = await browser.task(instruction);
     console.log(result.status.toUpperCase());
     console.log(`Steps: ${result.steps.length}`);
+    console.log(`Inference steps: ${result.steps.filter((step) => step.action).length}`);
     console.log(`Duration: ${(Date.now() - startedAt) / 1000}s`);
     console.log("Trace:");
     console.log(`${result.artifactsPath}/trace.json`);

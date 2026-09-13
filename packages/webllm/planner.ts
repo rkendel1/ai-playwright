@@ -1,106 +1,110 @@
-import type { BrowserAction } from "../core/actions.js";
+import { CreateMLCEngine, type MLCEngineInterface } from "@mlc-ai/web-llm";
+import { actionSchema, type BrowserAction } from "../core/actions.js";
 import type { Planner, PlannerInput } from "../core/planner.js";
-import { parseProjectName } from "../core/planner.js";
 
-function includesText(haystack: string, needle: string): boolean {
-  return haystack.toLowerCase().includes(needle.toLowerCase());
+export type WebLLMPlannerOptions = {
+  model?: string;
+  engine?: MLCEngineInterface;
+  engineFactory?: (model: string) => Promise<MLCEngineInterface>;
+};
+
+const DEFAULT_MODEL = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+
+function systemPrompt(): string {
+  return [
+    "You are the AI Playwright planner.",
+    "Return exactly one JSON object matching the BrowserAction protocol.",
+    "Do not return markdown, prose, JavaScript, Playwright locators, or multiple actions.",
+    "Reason only over the supplied Observation. Use target.observationId and target.elementId from the Observation elements.",
+    "Allowed actions:",
+    '{"type":"goto","url":"https://example.test","reason":"...","confidence":0.8,"risk":"write"}',
+    '{"type":"click","target":{"observationId":"obs-1","elementId":"e1"},"reason":"...","confidence":0.8,"risk":"write"}',
+    '{"type":"fill","target":{"observationId":"obs-1","elementId":"e2"},"value":"text","reason":"...","confidence":0.8,"risk":"write"}',
+    '{"type":"press","target":{"observationId":"obs-1","elementId":"e2"},"key":"Enter","reason":"...","confidence":0.8,"risk":"write"}',
+    '{"type":"select","target":{"observationId":"obs-1","elementId":"e3"},"value":"option","reason":"...","confidence":0.8,"risk":"write"}',
+    '{"type":"assert","assertion":{"type":"textVisible","text":"Demo"},"reason":"...","confidence":0.8,"risk":"read"}',
+    '{"type":"finish","result":"success","reason":"...","confidence":0.8,"risk":"read"}',
+    '{"type":"blocked","reason":"...","confidence":0.8,"risk":"read"}',
+  ].join("\n");
 }
 
-function bestCreateButton(elements: PlannerInput["observation"]["elements"]) {
-  return elements.find((element) => {
-    if (element.role !== "button") return false;
-    const name = element.name.toLowerCase();
-    return (
-      (name.includes("project") && (name.includes("new") || name.includes("create") || name.includes("add"))) ||
-      name === "new project" ||
-      name === "create project"
-    );
+function ensureWebLLMRuntimeGlobals() {
+  const globalObject = globalThis as typeof globalThis & { location?: Location };
+  if (!globalObject.location) {
+    globalObject.location = new URL("http://localhost") as unknown as Location;
+  }
+}
+
+async function createDefaultEngine(model: string): Promise<MLCEngineInterface> {
+  ensureWebLLMRuntimeGlobals();
+  return CreateMLCEngine(model);
+}
+
+function userPrompt(input: PlannerInput): string {
+  return JSON.stringify({
+    task: input.task,
+    currentObservation: input.observation,
+    history: input.history.map((step) => ({
+      action: step.action,
+      validation: step.validation,
+      result: step.result,
+    })),
+    remainingSteps: input.remainingSteps,
+    defaultUrl: input.defaultUrl,
   });
 }
 
-function submitButton(elements: PlannerInput["observation"]["elements"]) {
-  const exact = elements.find((element) => {
-    if (element.role !== "button") return false;
-    const name = element.name.toLowerCase();
-    return name === "create" || name === "submit";
-  });
-  if (exact) return exact;
-
-  return elements.find((element) => {
-    if (element.role !== "button") return false;
-    const name = element.name.toLowerCase();
-    return name.includes("create") && !name.includes("new");
-  });
+function parseModelJson(content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch (error) {
+    throw new Error(`WebLLM returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 export class WebLLMPlanner implements Planner {
   readonly provider = "webllm";
   readonly model: string;
+  private enginePromise?: Promise<MLCEngineInterface>;
 
-  constructor(model = "local-rule-mvp") {
-    this.model = model;
+  constructor(options: WebLLMPlannerOptions | string = {}) {
+    if (typeof options === "string") {
+      this.model = options;
+      this.engineFactory = createDefaultEngine;
+      return;
+    }
+    this.model = options.model ?? process.env.AIPW_WEBLLM_MODEL ?? DEFAULT_MODEL;
+    this.engine = options.engine;
+    this.engineFactory = options.engineFactory ?? createDefaultEngine;
+  }
+
+  private readonly engine?: MLCEngineInterface;
+  private readonly engineFactory: (model: string) => Promise<MLCEngineInterface>;
+
+  private async getEngine(): Promise<MLCEngineInterface> {
+    if (this.engine) return this.engine;
+    this.enginePromise ??= this.engineFactory(this.model).catch((error) => {
+      throw new Error(`Failed to initialize WebLLM model '${this.model}': ${error instanceof Error ? error.message : String(error)}`);
+    });
+    return this.enginePromise;
   }
 
   async next(input: PlannerInput): Promise<BrowserAction> {
-    const { observation, history, defaultUrl } = input;
-    const projectName = parseProjectName(input.task);
-    const lastAction = history.at(-1)?.action as BrowserAction | undefined;
-
-    if ((observation.url === "about:blank" || observation.url === "") && defaultUrl) {
-      return { type: "goto", url: defaultUrl, reason: "Start by opening the target application." };
+    const engine = await this.getEngine();
+    const completion = await engine.chat.completions.create({
+      messages: [
+        { role: "system", content: systemPrompt() },
+        { role: "user", content: userPrompt(input) },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0,
+      max_tokens: 500,
+      extra_body: { enable_latency_breakdown: true },
+    });
+    const content = completion.choices[0]?.message.content;
+    if (typeof content !== "string" || content.trim().length === 0) {
+      throw new Error("WebLLM returned an empty BrowserAction response.");
     }
-
-    if (lastAction?.type === "assert" && history.at(-1)?.result.status === "success") {
-      return {
-        type: "finish",
-        result: "success",
-        reason: `Verified that '${projectName}' is visible.`,
-      };
-    }
-
-    if (includesText(observation.text, projectName)) {
-      return {
-        type: "assert",
-        assertion: { type: "textVisible", text: projectName },
-        reason: `Project '${projectName}' appears in visible page text.`,
-      };
-    }
-
-    const textboxes = observation.elements.filter((e) => e.role === "textbox");
-    const projectTextbox = textboxes.find((e) => includesText(e.name, "project") || includesText(e.name, "name"));
-
-    if (projectTextbox && projectTextbox.value !== projectName) {
-      return {
-        type: "fill",
-        target: { id: projectTextbox.id },
-        value: projectName,
-        reason: "Enter the requested project name.",
-      };
-    }
-
-    if (projectTextbox && projectTextbox.value === projectName) {
-      const create = submitButton(observation.elements);
-      if (create) {
-        return {
-          type: "click",
-          target: { id: create.id },
-          reason: "Submit the create project form.",
-        };
-      }
-    }
-
-    const createButton = bestCreateButton(observation.elements);
-    if (createButton) {
-      return {
-        type: "click",
-        target: { id: createButton.id },
-        reason: `Use '${createButton.name}' to continue project creation.`,
-      };
-    }
-
-    return {
-      type: "blocked",
-      reason: 'I could not find a control that safely performs the requested "create project" action.',
-    };
+    return actionSchema.parse(parseModelJson(content)) as BrowserAction;
   }
 }

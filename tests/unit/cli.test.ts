@@ -6,6 +6,16 @@ describe("CLI parseArgs", () => {
     const parsed = parseArgs(["run", "--url", "http://localhost:3000", "Create", "Demo"]);
     expect(parsed).toEqual({
       url: "http://localhost:3000",
+      planner: "webllm",
+      instruction: "Create Demo",
+    });
+  });
+
+  it("parses explicit mock planner", () => {
+    const parsed = parseArgs(["run", "--planner", "mock", "--url", "http://localhost:3000", "Create", "Demo"]);
+    expect(parsed).toEqual({
+      url: "http://localhost:3000",
+      planner: "mock",
       instruction: "Create Demo",
     });
   });

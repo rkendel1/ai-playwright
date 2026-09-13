@@ -5,9 +5,10 @@ AI Playwright is a local-first browser automation runtime with a constrained act
 ## MVP capabilities
 
 - Obscura runtime adapter (`packages/obscura/runtime.ts`)
-- WebLLM planner adapter (`packages/webllm/planner.ts`)
+- WebLLM planner adapter backed by `@mlc-ai/web-llm` (`packages/webllm/planner.ts`)
+- Explicit mock planner for deterministic tests (`packages/core/mockPlanner.ts`)
 - Playwright executor adapter (`packages/core/executor.ts`)
-- Observe → plan → validate → execute loop (`packages/core/task.ts`)
+- Observe → WebLLM inference → schema validation → semantic/policy validation → execute loop (`packages/core/task.ts`)
 - Structured trace + screenshots under `.artifacts/task-xxx/`
 - TypeScript API (`packages/core/index.ts`)
 - CLI (`packages/cli/index.ts`)
@@ -31,6 +32,7 @@ import { aiPlaywright } from "./packages/core/index.js";
 
 const browser = await aiPlaywright({
   browser: "obscura",
+  planner: "webllm",
   model: "webllm",
   url: "http://localhost:3000",
 });
@@ -47,5 +49,15 @@ console.log(result);
 ### CLI
 
 ```bash
-npx tsx packages/cli/index.ts run --url http://localhost:3000 "Create a project called Demo and verify it appears"
+npx tsx packages/cli/index.ts run --planner webllm --url http://localhost:3000 "Create a project called Demo and verify it appears"
+```
+
+Use `--planner mock` only for deterministic local tests. The WebLLM planner does not fall back to mock behavior; if the local WebLLM model cannot initialize, the run fails clearly.
+
+### Real WebLLM acceptance test
+
+The full local acceptance path is gated because it requires Obscura and a local WebLLM-capable environment:
+
+```bash
+AIPW_REAL_WEBLLM=1 AIPW_WEBLLM_MODEL=Llama-3.2-1B-Instruct-q4f16_1-MLC npm test -- tests/e2e/real-runtime.e2e.ts
 ```

@@ -3,14 +3,18 @@ import { PlaywrightExecutor } from "./executor.js";
 import type { TaskResult } from "./evidence.js";
 import { runTask } from "./task.js";
 import type { Planner } from "./planner.js";
+import { MockPlanner } from "./mockPlanner.js";
 import { WebLLMPlanner } from "../webllm/planner.js";
 import type { BrowserRuntime } from "./runtime.js";
 import { ObscuraRuntime } from "../obscura/runtime.js";
 import type { Page } from "playwright";
 
+export type PlannerMode = "webllm" | "mock";
+
 export type AiPlaywrightOptions = {
   browser?: "obscura";
   model?: "webllm" | { provider: "webllm"; model: string };
+  planner?: PlannerMode | Planner;
   url?: string;
   headless?: boolean;
   limits?: {
@@ -18,7 +22,6 @@ export type AiPlaywrightOptions = {
     maxTimeMs?: number;
   };
   artifactsDir?: string;
-  planner?: Planner;
   runtime?: BrowserRuntime;
 };
 
@@ -28,11 +31,17 @@ export type AiPlaywrightBrowser = {
   close(): Promise<void>;
 };
 
-function createPlanner(modelOption: AiPlaywrightOptions["model"]): Planner {
-  if (!modelOption || modelOption === "webllm") {
-    return new WebLLMPlanner();
-  }
-  return new WebLLMPlanner(modelOption.model);
+function modelName(modelOption: AiPlaywrightOptions["model"]): string | undefined {
+  if (!modelOption || modelOption === "webllm") return undefined;
+  return modelOption.model;
+}
+
+function createPlanner(options: AiPlaywrightOptions): Planner {
+  if (typeof options.planner === "object") return options.planner;
+  const mode = options.planner ?? "webllm";
+  if (mode === "mock") return new MockPlanner();
+  if (mode === "webllm") return new WebLLMPlanner({ model: modelName(options.model) });
+  throw new Error(`Unsupported planner '${mode}'.`);
 }
 
 export async function aiPlaywright(options: AiPlaywrightOptions = {}): Promise<AiPlaywrightBrowser> {
@@ -43,7 +52,7 @@ export async function aiPlaywright(options: AiPlaywrightOptions = {}): Promise<A
     }
     throw new Error(`Unsupported browser runtime '${browser}'.`);
   })();
-  const planner = options.planner ?? createPlanner(options.model);
+  const planner = createPlanner(options);
   const executor = new PlaywrightExecutor();
   const launched = await runtime.launch();
 
@@ -84,3 +93,5 @@ export async function aiPlaywright(options: AiPlaywrightOptions = {}): Promise<A
 
 export type { TaskResult } from "./evidence.js";
 export type { BrowserAction } from "./actions.js";
+export { MockPlanner } from "./mockPlanner.js";
+export { WebLLMPlanner } from "../webllm/planner.js";

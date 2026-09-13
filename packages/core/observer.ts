@@ -1,39 +1,50 @@
 import type { Page } from "playwright";
 
-export type ObservedElement = {
+export type ElementObservation = {
   id: string;
-  role: string;
-  name: string;
+  role?: string;
+  name?: string;
   value?: string;
+  state: {
+    visible: boolean;
+    enabled: boolean;
+    checked?: boolean;
+  };
 };
 
 export type Observation = {
+  id: string;
+  generation: number;
   url: string;
   title: string;
-  text: string;
-  elements: ObservedElement[];
+  elements: ElementObservation[];
+  text?: string;
 };
 
-type RawObservedElement = {
+type RawElementObservation = ElementObservation;
+
+type RawObservation = {
   id: string;
-  role: string;
-  name: string;
-  value?: string;
+  generation: number;
+  url: string;
+  title: string;
+  text?: string;
+  elements: RawElementObservation[];
 };
 
 export async function observe(page: Page): Promise<Observation> {
   const data = await page.evaluate(() => {
+    const win = window as typeof window & { __aipwObservationGeneration?: number };
+    win.__aipwObservationGeneration = (win.__aipwObservationGeneration ?? 0) + 1;
+    const generation = win.__aipwObservationGeneration;
+    const observationId = `obs-${generation}`;
     const selectors = "button, input, textarea, select, a, [role='button'], [role='link'], [role='textbox'], [role='combobox']";
     const all = Array.from(document.querySelectorAll<HTMLElement>(selectors));
 
-    const visible = all.filter((el) => {
+    const elements = all.map((el, index) => {
       const style = window.getComputedStyle(el);
-      if (style.visibility === "hidden" || style.display === "none") return false;
       const rect = el.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    });
-
-    const elements = visible.map((el, index) => {
+      const visible = style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
       const id = el.dataset.aipwId ?? `e${index + 1}`;
       el.dataset.aipwId = id;
       const tag = el.tagName.toLowerCase();
@@ -61,12 +72,26 @@ export async function observe(page: Page): Promise<Observation> {
         : "";
       const name = [aria, labelText, text, placeholder].find((v) => v.length > 0) || tag;
       const value = "value" in el ? String((el as HTMLInputElement).value ?? "") : undefined;
-      return { id, role, name, value };
-    });
+      const disabled = "disabled" in el ? Boolean((el as HTMLInputElement).disabled) : el.getAttribute("aria-disabled") === "true";
+      const checked = "checked" in el ? Boolean((el as HTMLInputElement).checked) : undefined;
+      return {
+        id,
+        role,
+        name,
+        value,
+        state: {
+          visible,
+          enabled: !disabled,
+          checked,
+        },
+      };
+    }).filter((element) => element.state.visible);
 
     const pageText = (document.body?.innerText || "").slice(0, 4000);
 
     return {
+      id: observationId,
+      generation,
       url: window.location.href,
       title: document.title,
       text: pageText,
@@ -74,5 +99,5 @@ export async function observe(page: Page): Promise<Observation> {
     };
   });
 
-  return data as { url: string; title: string; text: string; elements: RawObservedElement[] };
+  return data as RawObservation;
 }

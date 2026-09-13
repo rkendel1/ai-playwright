@@ -15,7 +15,7 @@ async function runTaskWithDemo(options?: {
   const artifactsDir = path.resolve(".artifacts-tests");
   const browser = await aiPlaywright({
     browser: "obscura",
-    model: "webllm",
+    planner: "mock",
     url: demo.url,
     headless: true,
     artifactsDir,
@@ -45,8 +45,10 @@ describe("AI Playwright MVP", () => {
 
     const tracePath = path.join(result.artifactsPath, "trace.json");
     const traceRaw = await fs.readFile(tracePath, "utf-8");
-    const trace = JSON.parse(traceRaw) as { status: string };
+    const trace = JSON.parse(traceRaw) as { status: string; steps: Array<{ validation?: { status: string }; telemetry?: { inferenceMs: number } }> };
     expect(trace.status).toBe("passed");
+    expect(trace.steps.every((step) => step.validation?.status === "success")).toBe(true);
+    expect(trace.steps.some((step) => typeof step.telemetry?.inferenceMs === "number")).toBe(true);
   });
 
   it("recovers from renamed creation button", async () => {

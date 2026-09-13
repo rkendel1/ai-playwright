@@ -11,7 +11,9 @@ export type PlannerInput = {
 };
 
 export interface Planner {
+  readonly provider?: string;
   next(input: PlannerInput): Promise<BrowserAction>;
+  plan?(input: Omit<PlannerInput, "history" | "remainingSteps">): Promise<BrowserAction[]>;
 }
 
 export function parseProjectName(task: string): string {
