@@ -39,14 +39,15 @@ Evidence: .ai-playwright-results/task-abc123.json
 - Call `aipw-core` kernel with deterministic Planner + real BrowserExecutor
 - Output result to console + JSON file
 
-### 2. Planner Adapter (Deterministic for PR #8)
-- `packages/cli/adapters/planner.ts`
+### 2. Deterministic Planner Adapter (PR #8 only)
+- `packages/cli/adapters/DeterministicPlannerAdapter.ts` or `CliPlannerAdapter.ts`
+- **DO NOT name it `RemotePlannerAdapter`** (would incorrectly imply cloud/remote LLM dependency)
 - Implements `Planner` interface from `@aipw/core`
-- **PR #8 uses a deterministic/minimal planner** (not WebLLM, not remote LLM)
-  - Parse task as simple steps (navigate, click, fill, assert)
+- **PR #8 uses deterministic/minimal planner** (not WebLLM, not remote LLM, not real inference)
+  - Parse task as simple deterministic steps (navigate, click, fill, assert)
   - Generate predictable action sequence
   - Serve as proof-of-concept for adapter contract
-- **PR #9 will swap this with WebLLM** without changing CLI or kernel
+- **PR #9 will swap this with WebLLM adapter** without changing CLI or kernel
 - Return `BrowserAction` matching kernel expectations
 
 ### 3. Result Formatter
@@ -178,19 +179,35 @@ Evidence: .ai-playwright-results/task-abc123.json
 
 ---
 
-## Acceptance Gate
+## Acceptance Gate (PR #8)
 
-The PR is done when a developer (or reviewer without Playwright background) can:
+The PR is done only when this works with a real application:
 
-1. Clone repo
-2. `npm install`
-3. `npx ai-playwright --url http://localhost:3000 "test checkout"`
-4. Get deterministic PASS/FAIL + JSON evidence
-5. Understand what happened without documentation
+```bash
+npx ai-playwright --url http://127.0.0.1:3000 "test checkout"
+```
 
-**Success:** CLI is self-documenting and requires no platform knowledge.
+**Must demonstrate:**
+- ✅ CLI parses URL + task correctly
+- ✅ DeterministicPlannerAdapter produces valid BrowserActions
+- ✅ aipw-core kernel owns task progression (real state machine)
+- ✅ Real Playwright executes actions against live page
+- ✅ Playwright connects to Obscura (no silent Chromium fallback)
+- ✅ Target application is actually exercised (real clicks, fills, navigation)
+- ✅ Independent runtime assertions determine success (real "Order confirmed" check)
+- ✅ CLI reports PASS, FAIL, or BLOCKED with confidence
+- ✅ Evidence/trace emitted as JSON (TaskResult structure)
+- ✅ Developer sees clear result without Playwright/CDP/Obscura knowledge
 
-**Failure:** If reviewer asks "how does this work?" or "what's a Playwright?", the CLI isn't ready.
+**Must NOT include:**
+- ❌ No WebLLM integration (that's PR #9)
+- ❌ No browser-local code path (that's PR #9-alt or later)
+- ❌ No kernel changes
+- ❌ No MCP, autonomy loops, or extra orchestration
+- ❌ No real LLM API calls (deterministic planner only)
+
+**Architectural proof:**
+If PR #9 can swap only the planner adapter (`DeterministicPlannerAdapter` → `WebLLMPlannerAdapter`) and the rest of the pipeline remains unchanged, that proves the architecture is correct.
 
 ---
 
