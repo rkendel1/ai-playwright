@@ -16,6 +16,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@mlc-ai/web-llm": "^0.2.85",
     "playwright": "^1.63.0",
     "zod": "^4.6.4"
   },
