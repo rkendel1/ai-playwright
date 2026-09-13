@@ -28,6 +28,18 @@ function systemPrompt(): string {
   ].join("\n");
 }
 
+function ensureWebLLMRuntimeGlobals() {
+  const globalObject = globalThis as typeof globalThis & { location?: Location };
+  if (!globalObject.location) {
+    globalObject.location = new URL("http://localhost") as unknown as Location;
+  }
+}
+
+async function createDefaultEngine(model: string): Promise<MLCEngineInterface> {
+  ensureWebLLMRuntimeGlobals();
+  return CreateMLCEngine(model);
+}
+
 function userPrompt(input: PlannerInput): string {
   return JSON.stringify({
     task: input.task,
@@ -58,12 +70,12 @@ export class WebLLMPlanner implements Planner {
   constructor(options: WebLLMPlannerOptions | string = {}) {
     if (typeof options === "string") {
       this.model = options;
-      this.engineFactory = (model) => CreateMLCEngine(model);
+      this.engineFactory = createDefaultEngine;
       return;
     }
     this.model = options.model ?? process.env.AIPW_WEBLLM_MODEL ?? DEFAULT_MODEL;
     this.engine = options.engine;
-    this.engineFactory = options.engineFactory ?? ((model) => CreateMLCEngine(model));
+    this.engineFactory = options.engineFactory ?? createDefaultEngine;
   }
 
   private readonly engine?: MLCEngineInterface;
