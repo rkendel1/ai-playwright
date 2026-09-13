@@ -32,3 +32,28 @@ export type RunMetadata = {
   durationMs?: number;
   error?: string;
 };
+
+export type SuiteRunFinalStatus = "passed" | "failed" | "blocked";
+
+export type SuiteRunStatus = SuiteRunFinalStatus | "running";
+
+export type SuiteRunEntry = {
+  testId: string;
+  testName: string;
+  runId: string;
+  status: SuiteRunFinalStatus;
+  durationMs: number;
+  planner?: string;
+  model?: string;
+  browser: string;
+};
+
+export type SuiteRun = {
+  id: string;
+  startedAt: number;
+  finishedAt?: number;
+  durationMs?: number;
+  status: SuiteRunStatus;
+  tests: SuiteRunEntry[];
+  evidence: string;
+};

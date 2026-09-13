@@ -6,13 +6,11 @@ import {
   discoverTests,
   createTestFile,
   runTests,
-  runTest,
-  listRuns,
+  runSuite,
   getLatestRun,
 } from "../workspace/index.js";
 import { startUIServer } from "../workspace/ui-server.js";
-import { formatRunResult, formatRunSummary } from "./result-formatter.js";
-import type { TestDefinition } from "../workspace/index.js";
+import { formatRunResult, formatRunSummary, formatSuiteRun } from "./result-formatter.js";
 import type { ModelConfig, PlannerMode } from "../workspace/config.js";
 
 /**
@@ -84,7 +82,14 @@ export async function runTestCommand(
     testsToRun = [test];
   }
 
-  // Run tests
+  if (!testName) {
+    console.log(`Running ${testsToRun.length} tests...`);
+    const suiteRun = await runSuite(testsToRun, config);
+    console.log(formatSuiteRun(suiteRun));
+    process.exit(suiteRun.status === "passed" ? 0 : 1);
+  }
+
+  // Run single selected test through the same runner used by suite execution.
   console.log(`Running ${testsToRun.length} test(s)...\n`);
 
   const results = await runTests(testsToRun, config);
