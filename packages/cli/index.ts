@@ -5,15 +5,21 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { aiPlaywright } from "../core/index.js";
 import { CliPlannerAdapter } from "./adapters/CliPlannerAdapter.js";
+import { initWorkspace, runTestCommand, listTestsCommand } from "./workspace-commands.js";
 
 /**
- * AI Playwright CLI — PR #8 Vertical Slice
+ * AI Playwright CLI — PR #9 Workspace
  *
- * Proves the complete path:
- * CLI → CliPlannerAdapter → PR #5 Kernel → Playwright → Obscura → real app → TaskResult
+ * Two modes:
+ * 1. Workspace mode (default):
+ *    npx ai-playwright init
+ *    npx ai-playwright test [name]
  *
- * Usage:
- *   npx ai-playwright --url http://127.0.0.1:3000 "test checkout"
+ * 2. One-shot mode (PR #8 compatibility):
+ *    npx ai-playwright --url http://127.0.0.1:3000 "test checkout"
+ *
+ * Both modes use the same runner:
+ * CLI → runner → CliPlannerAdapter → kernel → Playwright/Obscura
  */
 
 export function parseArgs(args: string[]) {
@@ -40,9 +46,8 @@ export function parseArgs(args: string[]) {
   return { url, instruction, headed, artifactsDir };
 }
 
-async function main() {
+async function oneShotMode(url: string, instruction: string, artifactsDir: string, headed: boolean) {
   const startedAt = Date.now();
-  const { url, instruction, headed, artifactsDir } = parseArgs(process.argv.slice(2));
 
   // Validate inputs
   if (!url) {
@@ -75,7 +80,7 @@ async function main() {
   console.log(`Browser: Obscura\n`);
 
   try {
-    // Launch browser with CliPlannerAdapter (deterministic for PR #8)
+    // Launch browser with CliPlannerAdapter
     const browser = await aiPlaywright({
       browser: "obscura",
       headless: !headed,
@@ -140,6 +145,41 @@ async function main() {
       console.error(error.stack);
     }
     process.exit(1);
+  }
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+
+  // Determine mode
+  if (args[0] === "init") {
+    // Workspace init mode
+    await initWorkspace(process.cwd());
+    process.exit(0);
+  } else if (args[0] === "test") {
+    // Workspace test mode
+    const testName: string | undefined = args.length > 1 ? args[1] : undefined;
+    await runTestCommand(testName, { workspaceDir: process.cwd() });
+  } else if (args.includes("--url")) {
+    // One-shot mode (backward compatibility with PR #8)
+    const { url, instruction, headed, artifactsDir } = parseArgs(args);
+    await oneShotMode(url, instruction, artifactsDir, headed);
+  } else {
+    // Default: list tests or show help
+    if (args[0] === "ls" || args[0] === "list" || args.length === 0) {
+      await listTestsCommand();
+      process.exit(0);
+    } else {
+      console.error("Usage:");
+      console.error("  npx ai-playwright init                                           # Initialize workspace");
+      console.error(
+        "  npx ai-playwright test [name]                                   # Run test(s)"
+      );
+      console.error(
+        "  npx ai-playwright --url http://localhost:3000 \"task\"            # One-shot mode"
+      );
+      process.exit(1);
+    }
   }
 }
 
