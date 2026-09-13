@@ -75,6 +75,11 @@ describe("AI Playwright MVP", () => {
       expect(result.status).toBe("passed");
       expect(connectSpy).not.toHaveBeenCalled();
       expect(launchSpy).toHaveBeenCalled();
+      expect(runtime.launchInfo()).toMatchObject({
+        browser: "playwright-chromium",
+        cdpConnected: false,
+        fallbackUsed: true,
+      });
     } finally {
       connectSpy.mockRestore();
       launchSpy.mockRestore();

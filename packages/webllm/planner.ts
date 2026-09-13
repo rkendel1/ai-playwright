@@ -29,9 +29,54 @@ function systemPrompt(): string {
 }
 
 function ensureWebLLMRuntimeGlobals() {
-  const globalObject = globalThis as typeof globalThis & { location?: Location };
+  const globalObject = globalThis as typeof globalThis & {
+    caches?: CacheStorage;
+    location?: Location;
+  };
   if (!globalObject.location) {
     globalObject.location = new URL("http://localhost") as unknown as Location;
+  }
+  if (!globalObject.caches) {
+    const stores = new Map<string, Map<string, Response>>();
+    globalObject.caches = {
+      async open(name: string) {
+        let store = stores.get(name);
+        if (!store) {
+          store = new Map<string, Response>();
+          stores.set(name, store);
+        }
+        return {
+          async match(request: RequestInfo | URL) {
+            const response = store.get(new Request(request).url);
+            return response?.clone();
+          },
+          async put(request: RequestInfo | URL, response: Response) {
+            store.set(new Request(request).url, response.clone());
+          },
+          async add(request: RequestInfo | URL) {
+            const normalized = new Request(request);
+            const response = await fetch(normalized);
+            store.set(normalized.url, response.clone());
+          },
+          async addAll(requests: RequestInfo[] | URL[]) {
+            await Promise.all(requests.map((request) => this.add(request)));
+          },
+          async keys() {
+            return Array.from(store.keys()).map((url) => new Request(url));
+          },
+          async matchAll(request?: RequestInfo | URL) {
+            if (request) {
+              const response = store.get(new Request(request).url);
+              return response ? [response.clone()] : [];
+            }
+            return Array.from(store.values()).map((response) => response.clone());
+          },
+          async delete(request: RequestInfo | URL) {
+            return store.delete(new Request(request).url);
+          },
+        } as Cache;
+      },
+    } as CacheStorage;
   }
 }
 
