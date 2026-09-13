@@ -7,7 +7,9 @@
     "build": "tsc -p tsconfig.json",
     "build:wasm": "tsc -p tsconfig.wasm.json",
     "test": "vitest run",
-    "dev": "tsx packages/cli/index.ts"
+    "dev": "tsx packages/cli/index.ts",
+    "web:dev": "vite",
+    "web:build": "vite build"
   },
   "repository": {
     "type": "git",
@@ -25,6 +27,7 @@
     "@types/node": "^26.5.1",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
+    "vite": "^5.0.0",
     "vitest": "^5.0.0"
   },
   "type": "module",
