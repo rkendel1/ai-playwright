@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { RunMetadata } from "./test-model.js";
+import type { FailureDiagnosis } from "./failure-model.js";
+import { diagnoseFailure } from "./failure-model.js";
 
 /**
  * Simple run storage in artifacts directory
@@ -10,6 +12,7 @@ import type { RunMetadata } from "./test-model.js";
 export type StoredRun = RunMetadata & {
   result?: unknown; // TaskResult
   evidence?: string; // Path to evidence directory
+  failure?: FailureDiagnosis; // Failure details (if failed)
 };
 
 export function generateRunId(): string {
@@ -88,6 +91,11 @@ export function updateRun(
     if (current.startedAt) {
       updated.durationMs = updated.finishedAt - current.startedAt;
     }
+  }
+
+  // Auto-diagnose failures when result is updated
+  if (update.result && !update.failure && update.status !== "passed") {
+    updated.failure = diagnoseFailure(update.result);
   }
 
   fs.writeFileSync(runPath, JSON.stringify(updated, null, 2), "utf-8");

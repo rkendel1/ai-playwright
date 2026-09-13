@@ -11,6 +11,7 @@ import {
   getLatestRun,
 } from "../workspace/index.js";
 import { startUIServer } from "../workspace/ui-server.js";
+import { formatRunResult, formatRunSummary } from "./result-formatter.js";
 import type { TestDefinition } from "../workspace/index.js";
 
 /**
@@ -89,15 +90,31 @@ export async function runTestCommand(
   for (const test of testsToRun) {
     const result = results.find((r) => r.testId === test.id);
     if (result) {
-      const emoji = result.status === "passed" ? "✓" : result.status === "failed" ? "✗" : "⊘";
-      console.log(`  ${emoji} ${test.name}`);
+      const run = getLatestRun(config.artifacts, test.id);
+      const output = formatRunResult(
+        test.name,
+        result.status,
+        result.durationMs,
+        run?.failure,
+        result.taskResult
+      );
+      console.log(output);
     }
   }
 
   if (passed + failed + blocked > 0) {
     console.log(
-      `\n${passed} passed, ${failed} failed, ${blocked} blocked (${Math.round(results.reduce((s, r) => s + r.durationMs, 0) / 1000)}s)`
+      formatRunSummary(
+        testsToRun.map((t) => {
+          const result = results.find((r) => r.testId === t.id);
+          return {
+            testId: t.id,
+            status: result?.status || "blocked",
+          };
+        })
+      )
     );
+    console.log(`Time: ${Math.round(results.reduce((s, r) => s + r.durationMs, 0) / 1000)}s`);
   }
 
   console.log(`\nEvidence: ${config.artifacts}`);

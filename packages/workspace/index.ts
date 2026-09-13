@@ -8,3 +8,9 @@ export { type TestDefinition, type TestRun, type RunMetadata } from "./test-mode
 export { discoverTests, createTestFile } from "./test-discovery.js";
 export { generateRunId, createRun, updateRun, loadRun, listRuns, getLatestRun } from "./run-storage.js";
 export { runTest, runTests, type RunResult } from "./runner.js";
+export {
+  type FailureDiagnosis,
+  type FailurePhase,
+  type FailureCategory,
+  diagnoseFailure,
+} from "./failure-model.js";

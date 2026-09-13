@@ -168,6 +168,10 @@ async function main() {
   } else if (args.includes("--url")) {
     // One-shot mode (backward compatibility with PR #8)
     const { url, instruction, headed, artifactsDir } = parseArgs(args);
+    if (!url) {
+      console.error("Error: --url <URL> is required");
+      process.exit(1);
+    }
     await oneShotMode(url, instruction, artifactsDir, headed);
   } else {
     // Default: list tests or show help

@@ -49,6 +49,8 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
             ...test,
             status: latestRun?.status || "new",
             lastRun: latestRun?.finishedAt,
+            failure: latestRun?.failure,
+            durationMs: latestRun?.durationMs,
           };
         });
 
@@ -130,6 +132,7 @@ function getUIHTML(): string {
     .info-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #e0e0e0; }
     .info-label { color: #666; font-weight: 500; }
     .info-value { color: #333; }
+    .info-value.error { color: #d32f2f; font-family: monospace; font-size: 12px; word-break: break-word; }
     .section { margin-top: 30px; }
     .section-title { font-size: 16px; font-weight: 600; color: #333; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #2196F3; }
     .empty { color: #999; text-align: center; padding: 40px 20px; }
@@ -197,6 +200,53 @@ function getUIHTML(): string {
       }
 
       const statusEmoji = { pass: '✅', fail: '❌', blocked: '⊘', new: '⏳' }[selectedTest.status] || '◯';
+      const durationSec = selectedTest.durationMs ? (selectedTest.durationMs / 1000).toFixed(1) : '?';
+
+      let failureHtml = '';
+      if (selectedTest.failure) {
+        const f = selectedTest.failure;
+        failureHtml = \`
+          <div class="section">
+            <div class="section-title">Failure Details</div>
+            <div class="info-row">
+              <span class="info-label">Phase</span>
+              <span class="info-value">\${f.phase}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Category</span>
+              <span class="info-value">\${f.category}</span>
+            </div>
+            \${f.step !== undefined ? \`
+            <div class="info-row">
+              <span class="info-label">Step</span>
+              <span class="info-value">\${f.step}</span>
+            </div>
+            \` : ''}
+            \${f.action ? \`
+            <div class="info-row">
+              <span class="info-label">Action</span>
+              <span class="info-value">\${f.action.description || f.action.type}</span>
+            </div>
+            \` : ''}
+            \${f.observation?.url ? \`
+            <div class="info-row">
+              <span class="info-label">URL</span>
+              <span class="info-value">\${f.observation.url}</span>
+            </div>
+            \` : ''}
+            \${f.observation?.elementCount !== undefined ? \`
+            <div class="info-row">
+              <span class="info-label">Elements</span>
+              <span class="info-value">\${f.observation.elementCount} visible</span>
+            </div>
+            \` : ''}
+            <div class="info-row">
+              <span class="info-label">Error</span>
+              <span class="info-value error">\${f.message}</span>
+            </div>
+          </div>
+        \`;
+      }
 
       document.getElementById('result-content').innerHTML = \`
         <div class="result-header">
@@ -216,14 +266,16 @@ function getUIHTML(): string {
             <span class="info-value">\${statusEmoji} \${selectedTest.status.toUpperCase()}</span>
           </div>
           <div class="info-row">
+            <span class="info-label">Duration</span>
+            <span class="info-value">\${durationSec}s</span>
+          </div>
+          <div class="info-row">
             <span class="info-label">Last Run</span>
             <span class="info-value">\${selectedTest.lastRun ? new Date(selectedTest.lastRun).toLocaleString() : 'Never'}</span>
           </div>
-          <div class="info-row">
-            <span class="info-label">Task</span>
-            <span class="info-value">\${selectedTest.task}</span>
-          </div>
         </div>
+
+        \${failureHtml}
       \`;
     }
 
