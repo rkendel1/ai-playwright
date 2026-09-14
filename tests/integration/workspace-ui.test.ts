@@ -382,23 +382,23 @@ describe("workspace UI", () => {
     const baseUrl = serverBaseUrl(uiServer);
     await page!.goto(baseUrl);
 
-    await page!.getByRole("button", { name: "Secrets Vault" }).click();
-    await page!.getByLabel("Profile name").fill("Staging admin");
-    await page!.getByLabel("Username or email").fill("admin@example.test");
-    await page!.getByLabel("Password").fill("do-not-write-this");
-    await page!.getByRole("button", { name: "Save Secret" }).click();
-    await page!.locator("#vault-list").getByText("Staging admin", { exact: true }).waitFor();
-    await page!.getByRole("button", { name: "Close" }).click();
+    await page!.getByRole("button", { name: "Secrets Vault" }).click({ timeout: 3000 });
+    await page!.getByLabel("Profile name").fill("Staging admin", { timeout: 3000 });
+    await page!.getByLabel("Username or email").fill("admin@example.test", { timeout: 3000 });
+    await page!.getByLabel("Password").fill("do-not-write-this", { timeout: 3000 });
+    await page!.getByRole("button", { name: "Save Secret" }).click({ timeout: 3000 });
+    await page!.locator("#vault-list").getByText("Staging admin", { exact: true }).waitFor({ timeout: 3000 });
+    await page!.getByRole("button", { name: "Close" }).click({ timeout: 3000 });
 
-    await page!.getByRole("button", { name: "+ New Test" }).click();
+    await page!.getByRole("button", { name: "+ New Test" }).click({ timeout: 3000 });
     const testDialog = page!.getByRole("dialog", { name: "New Test" });
-    await testDialog.getByLabel("Name", { exact: true }).fill("Admin login");
-    await testDialog.getByLabel("Task").fill("Sign in and verify the dashboard");
-    await testDialog.getByLabel("Credential profile (optional)").selectOption({ label: "Staging admin" });
-    await testDialog.getByRole("button", { name: "Create" }).click();
+    await testDialog.getByLabel("Name", { exact: true }).fill("Admin login", { timeout: 3000 });
+    await testDialog.getByLabel("Task").fill("Sign in and verify the dashboard", { timeout: 3000 });
+    await testDialog.getByRole("checkbox", { name: /Staging admin/ }).check({ timeout: 3000 });
+    await testDialog.getByRole("button", { name: "Create" }).click({ timeout: 3000 });
 
     const testSource = await fs.readFile(path.join(workspaceDir, "tests", "admin-login.test.ts"), "utf8");
-    expect(testSource).toContain("secretProfileId");
+    expect(testSource).toContain("secretProfileIds");
     expect(testSource).not.toContain("admin@example.test");
     expect(testSource).not.toContain("do-not-write-this");
     const summaries = await (await fetch(`${baseUrl}/api/secrets`)).text();

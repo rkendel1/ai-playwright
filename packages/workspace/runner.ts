@@ -54,8 +54,25 @@ export async function runTest(
   const evidencePath = getRunEvidencePath(config.artifacts, "current");
   const planner = plannerOverride ?? createPlanner(config);
   const model = config.planner === "webllm" ? modelName(config.model) : undefined;
-  const secretProfile = test.secretProfileId ? await revealSecretProfile(config.artifacts, test.secretProfileId) : null;
-  if (test.secretProfileId && !secretProfile) throw new Error(`Secret profile '${test.secretProfileId}' was not found in the local Runora vault.`);
+  const secretProfileIds = test.secretProfileIds?.length
+    ? test.secretProfileIds
+    : test.secretProfileId
+      ? [test.secretProfileId]
+      : [];
+  const secretProfiles = await Promise.all(secretProfileIds.map((id) => revealSecretProfile(config.artifacts, id)));
+  const missingSecretIndex = secretProfiles.findIndex((profile) => !profile);
+  if (missingSecretIndex >= 0) {
+    throw new Error(`Secret profile '${secretProfileIds[missingSecretIndex]}' was not found in the local Runora vault.`);
+  }
+  const secrets = secretProfiles.reduce<Record<string, string>>((values, profile, index) => {
+    if (!profile) return values;
+    for (const [field, value] of Object.entries(profile.values)) {
+      if (index === 0 && !(field in values)) values[field] = value;
+      values[`${profile.summary.id}.${field}`] = value;
+      values[`${profile.summary.name}.${field}`] = value;
+    }
+    return values;
+  }, {});
 
   // Create run record
   const { runId } = createRun(config.artifacts, test.id, test.name, url, config.browser, config.planner, model);
@@ -75,7 +92,7 @@ export async function runTest(
         maxTimeMs: 300_000,
       },
       signal,
-      secrets: secretProfile?.values,
+      secrets,
     });
 
     const taskResult = await browser.task(test.task);

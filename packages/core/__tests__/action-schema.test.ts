@@ -17,22 +17,22 @@ describe("Action Schema", () => {
       const action = {
         type: "click" as const,
         locator: {
-          type: "text" as const,
-          selector: "search-input",
+          type: "semantic" as const,
+          intent: "search-input" as const,
         },
         reason: "Click search button",
       };
       const validated = validateAction(action);
-      expect(validated).toMatchObject({ type: "click", locator: { type: "text" } });
+      expect(validated).toMatchObject({ type: "click", locator: { type: "semantic" } });
     });
 
     it("should validate fill action with fallback locators", () => {
       const action = {
         type: "fill" as const,
-        locator: { type: "text" as const, selector: "Email" },
+        locator: { type: "label" as const, label: "Email" },
         value: "test@example.com",
         fallbackLocators: [
-          { type: "text" as const, selector: "your@email.com" },
+          { type: "placeholder" as const, placeholder: "your@email.com" },
         ],
       };
       const validated = validateAction(action);
