@@ -33,6 +33,7 @@ import type { ResolvedConfig, TestDefinition } from "./index.js";
 import type { BrowserAction } from "../core/actions.js";
 import type { Planner, PlannerInput } from "../core/planner.js";
 import { ProviderPlanner, type ProviderSettings } from "./provider-planner.js";
+import { createVisionService, type RecordedAction } from "./vision-service.js";
 
 /**
  * Interactive UI server for Runora Workspace
@@ -43,6 +44,17 @@ import { ProviderPlanner, type ProviderSettings } from "./provider-planner.js";
 let currentConfig: ResolvedConfig;
 let currentTests: TestDefinition[] = [];
 const WEBLLM_MODEL = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+
+// Recording session management
+interface RecordingSession {
+  id: string;
+  url: string;
+  startTime: number;
+  actions: RecordedAction[];
+  visionService?: any;
+}
+
+const recordingSessions = new Map<string, RecordingSession>();
 const WEBLLM_MODEL_SOURCE = `https://huggingface.co/mlc-ai/${WEBLLM_MODEL}/resolve/main`;
 const WEBLLM_LIB_SOURCE = "https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/v0_2_84/base/Llama-3.2-1B-Instruct-q4f16_1_cs1k-webgpu.wasm";
 
@@ -586,6 +598,153 @@ export async function startUIServer(
 
         res.writeHead(201, { "Content-Type": "application/json" });
         res.end(JSON.stringify(newTest));
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: String(error) }));
+      }
+      return;
+    }
+
+    // Recording API: Start a recording session
+    if (pathname === "/api/recording/start" && req.method === "POST") {
+      try {
+        const body = await parseJsonBody(req);
+        const sessionId = "rec-" + Date.now() + "-" + Math.random().toString(36).slice(2, 9);
+
+        const session: RecordingSession = {
+          id: sessionId,
+          url: body.url,
+          startTime: Date.now(),
+          actions: [],
+        };
+
+        recordingSessions.set(sessionId, session);
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          sessionId,
+          url: body.url,
+          recordingStarted: true,
+        }));
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: String(error) }));
+      }
+      return;
+    }
+
+    // Recording API: Record action with screenshot
+    if (pathname && pathname.startsWith("/api/recording/") && pathname.includes("/record-action") && req.method === "POST") {
+      try {
+        const sessionId = pathname.split("/")[3];
+        const session = recordingSessions.get(sessionId);
+        if (!session) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Session not found" }));
+          return;
+        }
+
+        const body = await parseJsonBody(req);
+        const action: RecordedAction = {
+          type: body.type,
+          target: body.target,
+          value: body.value,
+          coordinates: body.coordinates,
+          screenshot: body.screenshot, // base64 image data
+          timestamp: Date.now(),
+        };
+
+        session.actions.push(action);
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ recorded: true, actionCount: session.actions.length }));
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: String(error) }));
+      }
+      return;
+    }
+
+    // Recording API: Get recorded actions
+    if (pathname && pathname.startsWith("/api/recording/") && pathname.includes("/actions") && req.method === "GET") {
+      try {
+        const sessionId = pathname.split("/")[3];
+        const session = recordingSessions.get(sessionId);
+
+        if (!session) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Session not found" }));
+          return;
+        }
+
+        // Convert actions to display format
+        const displayActions = session.actions.map((action) => {
+          let description = "";
+          if (action.type === "click") {
+            description = `Clicked ${action.target || "element"}`;
+          } else if (action.type === "fill") {
+            description = `Entered "${action.value}" into ${action.target || "field"}`;
+          } else if (action.type === "navigate") {
+            description = `Navigated to ${action.value}`;
+          } else if (action.type === "screenshot") {
+            description = "Captured screenshot";
+          } else if (action.type === "wait") {
+            description = `Waited ${action.value || "for element"}`;
+          } else if (action.type === "scroll") {
+            description = `Scrolled ${action.value || "page"}`;
+          }
+          return { description };
+        });
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ actions: displayActions }));
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: String(error) }));
+      }
+      return;
+    }
+
+    // Recording API: Stop recording and generate description
+    if (pathname && pathname.startsWith("/api/recording/") && pathname.includes("/stop") && req.method === "POST") {
+      try {
+        const sessionId = pathname.split("/")[3];
+        const session = recordingSessions.get(sessionId);
+
+        if (!session) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Session not found" }));
+          return;
+        }
+
+        // Generate description using vision service
+        let description = "Replay recorded actions";
+        try {
+          const visionService = createVisionService();
+          await visionService.initialize();
+          description = await visionService.generateRecordingDescription(session.actions);
+          await visionService.close();
+        } catch (error) {
+          console.error("Vision analysis failed, using fallback:", error);
+          // Fallback: use simple description
+          const actionTypes = session.actions.map(a => a.type);
+          if (actionTypes.includes("navigate")) description = "Navigate and perform recorded actions";
+          else if (actionTypes.some(t => t === "click")) description = "Click elements and complete flow";
+          else description = "Replay recorded user actions";
+        }
+
+        const result = {
+          recordingStopped: true,
+          actionCount: session.actions.length,
+          description,
+          duration: Date.now() - session.startTime,
+        };
+
+        // Clean up session
+        recordingSessions.delete(sessionId);
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
       } catch (error) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: String(error) }));
