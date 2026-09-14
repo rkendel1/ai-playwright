@@ -93,8 +93,10 @@ function resolveEvidenceFile(run: any, fileName: string): string | null {
   }
   const resolvedDir = path.resolve(directory);
   const resolvedFile = path.resolve(directory, fileName);
+  const relativePath = path.relative(resolvedDir, resolvedFile);
   if (
-    (resolvedFile !== resolvedDir && !resolvedFile.startsWith(`${resolvedDir}${path.sep}`)) ||
+    relativePath.startsWith("..") ||
+    path.isAbsolute(relativePath) ||
     !fs.existsSync(resolvedFile)
   ) {
     return null;

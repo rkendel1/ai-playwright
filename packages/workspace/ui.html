@@ -653,7 +653,10 @@
     </div>
   </div>
 
-  <div id="feedback-region" class="status-toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="feedback-region" class="status-toast" role="status" aria-live="polite" aria-atomic="true">
+    <strong id="feedback-title"></strong>
+    <div id="feedback-detail" class="small-text mono" style="margin-top: 8px; display: none;"></div>
+  </div>
 
   <script>
     const state = {
@@ -853,7 +856,7 @@
             <span class="observation-chip">${escapeHtml(observationSummary(step))}</span>
           </div>
           <details id="step-observation-details" class="detail-toggle">
-            <summary>View details</summary>
+            <summary><span class="toggle-label" data-open-label="Hide details (expanded)" data-closed-label="View details (collapsed)">View details (collapsed)</span></summary>
             <ul class="detail-list">
               <li><strong>Page URL:</strong> ${escapeHtml(observation.url || 'No URL captured')}</li>
               <li><strong>Accessibility summary:</strong> ${interactive.length ? interactive.length + ' interactive elements visible' : 'No interactive elements were captured in this observation'}</li>
@@ -898,7 +901,7 @@
             ${highlight ? `<div class="evidence-highlight" style="${highlight}"></div>` : ''}
           </div>
           <details class="detail-toggle">
-            <summary>View full evidence</summary>
+            <summary><span class="toggle-label" data-open-label="Hide full evidence (expanded)" data-closed-label="View full evidence (collapsed)">View full evidence (collapsed)</span></summary>
             <div class="evidence-links">
               <div class="small-text mono">${escapeHtml(manifest.directory || run?.evidence || '(no evidence path recorded)')}</div>
               ${manifest.screenshots.map((entry) => `<a class="inline-link" href="${entry.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(entry.name)}</a>`).join('')}
@@ -915,13 +918,29 @@
 
     function showFeedback(message, detail) {
       const region = document.getElementById('feedback-region');
-      if (!region) return;
-      region.innerHTML = `<strong>${escapeHtml(message)}</strong>${detail ? `<div class="small-text mono" style="margin-top: 8px;">${escapeHtml(detail)}</div>` : ''}`;
+      const title = document.getElementById('feedback-title');
+      const detailNode = document.getElementById('feedback-detail');
+      if (!region || !title || !detailNode) return;
+      title.textContent = message;
+      detailNode.textContent = detail || '';
+      detailNode.style.display = detail ? 'block' : 'none';
       region.classList.add('visible');
       if (feedbackTimer) clearTimeout(feedbackTimer);
       feedbackTimer = setTimeout(() => {
         region.classList.remove('visible');
       }, 4000);
+    }
+
+    function syncDisclosureLabels(root) {
+      const scope = root || document;
+      scope.querySelectorAll('.detail-toggle').forEach((details) => {
+        const label = details.querySelector('.toggle-label');
+        if (!label) return;
+        const text = details.open ? label.dataset.openLabel : label.dataset.closedLabel;
+        if (text) {
+          label.textContent = text;
+        }
+      });
     }
 
     async function copySuggestion(text) {
@@ -1473,6 +1492,7 @@
       renderTests();
       renderSuiteRuns();
       renderResult();
+      syncDisclosureLabels();
     }
 
     async function loadTests() {
@@ -1696,6 +1716,12 @@
         closeNewTestForm();
       }
     });
+
+    document.addEventListener('toggle', (event) => {
+      if (event.target instanceof HTMLDetailsElement && event.target.classList.contains('detail-toggle')) {
+        syncDisclosureLabels(event.target.parentElement || document);
+      }
+    }, true);
 
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
