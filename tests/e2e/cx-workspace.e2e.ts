@@ -105,10 +105,10 @@ describe("CX workspace acceptance", () => {
     app = await startCXApp({ port: updateScreenshots ? 3000 : undefined });
     const initResult = await runCLI(["init"], workspaceDir);
     expect(initResult.code).toBe(0);
-    expect(initResult.stdout).toContain("AI Playwright workspace initialized");
+    expect(initResult.stdout).toContain("Runora workspace initialized");
 
     await fs.writeFile(
-      path.join(workspaceDir, "ai-playwright.config.ts"),
+      path.join(workspaceDir, "runora.config.ts"),
       `export default {
   url: "${app.routes.checkout}",
   planner: "deterministic",
@@ -154,14 +154,14 @@ describe("CX workspace acceptance", () => {
 
     await testCard(page, "Checkout").click();
     await page.getByRole("button", { name: "Run Test" }).click();
-    await page.getByText("AI Playwright is actively planning and executing this test.").waitFor();
+    await page.getByText("Runora is actively planning and executing this test.").waitFor();
     await maybeScreenshot(page, "04-running.png");
     await detailStatus(page, "PASS").waitFor();
     await maybeScreenshot(page, "05-pass.png");
 
     await testCard(page, "Invalid Payment").click();
     await page.getByRole("button", { name: "Run Test" }).click();
-    await page.getByText("AI Playwright is actively planning and executing this test.").waitFor();
+    await page.getByText("Runora is actively planning and executing this test.").waitFor();
     await detailStatus(page, "FAIL").waitFor({ timeout: 40000 });
     await maybeScreenshot(page, "06-failure.png");
     await page.getByRole("button", { name: /Step 4/ }).click();

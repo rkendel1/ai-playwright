@@ -1,4 +1,4 @@
-// AI Playwright WASM Kernel
+// Runora WASM Kernel
 // Runtime-independent, portable state machine for browser automation
 
 export {

@@ -21,7 +21,7 @@ import {
 import type { ResolvedConfig, TestDefinition } from "./index.js";
 
 /**
- * Interactive UI server for AI Playwright Workspace
+ * Interactive UI server for Runora Workspace
  * Uses built-in Node http (no Express dependency)
  * Both CLI and UI use the shared runner
  */
@@ -453,7 +453,7 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
       server.off("error", onError);
       const address = server.address();
       const actualPort = address && typeof address !== "string" ? address.port : port;
-      console.log(`\n📊 AI Playwright UI`);
+      console.log(`\n📊 Runora UI`);
       console.log(`   Open: http://127.0.0.1:${actualPort}`);
       console.log(`   Workspace: ${workspaceDir}`);
       resolve();

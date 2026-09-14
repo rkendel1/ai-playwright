@@ -40,6 +40,9 @@ function withoutUndefined<T extends Record<string, unknown>>(value: T): Partial<
 
 async function loadConfigFile(workspaceDir: string): Promise<WorkspaceConfig | null> {
   const possiblePaths = [
+    path.join(workspaceDir, "runora.config.ts"),
+    path.join(workspaceDir, "runora.config.js"),
+    path.join(workspaceDir, "runora.config.json"),
     path.join(workspaceDir, "ai-playwright.config.ts"),
     path.join(workspaceDir, "ai-playwright.config.js"),
     path.join(workspaceDir, "ai-playwright.config.json"),

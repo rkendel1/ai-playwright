@@ -2,3 +2,11 @@ node_modules/
 dist/
 .artifacts/
 .artifacts-tests/
+.runora-results/
+.runora-results-test/
+.ai-playwright-results/
+.ai-playwright-results-test/
+.config-test-workspace/
+.workspace-test-*/
+.test-mgmt-*/
+.cx-workspace-*/

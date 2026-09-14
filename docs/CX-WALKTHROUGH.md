@@ -1,6 +1,6 @@
-# AI Playwright CX Walkthrough
+# Runora CX Walkthrough
 
-This is the canonical AI Playwright journey from a clean workspace to durable suite history.
+This is the canonical Runora journey from a clean workspace to durable suite history.
 
 Canonical app:
 
@@ -23,7 +23,7 @@ Runtime truth:
 - Semantic control: `aipw-core`
 - Persistence: workspace filesystem
 
-The developer describes what they want tested. AI Playwright plans browser actions, executes them against a real browser, and preserves evidence when something goes wrong.
+The developer describes what they want tested. Runora plans browser actions, executes them against a real browser, and preserves evidence when something goes wrong.
 
 ## 1. Install
 
@@ -38,12 +38,12 @@ The developer describes what they want tested. AI Playwright plans browser actio
 - User action:
 
   ```bash
-  npx ai-playwright init
+  npx runora init
   ```
 
 - Screenshot: ![Empty workspace](./images/cx/01-empty-workspace.png)
-- What the user sees: AI Playwright opens on a clean workspace with no saved tests yet and one obvious first action.
-- What the system is doing: creating `ai-playwright.config.ts`, `tests/`, and `artifacts/` in the workspace.
+- What the user sees: Runora opens on a clean workspace with no saved tests yet and one obvious first action.
+- What the system is doing: creating `runora.config.ts`, `tests/`, and `artifacts/` in the workspace.
 - Expected result: the workspace exists and is ready for test authoring.
 
 ## 3. Open UI
@@ -51,7 +51,7 @@ The developer describes what they want tested. AI Playwright plans browser actio
 - User action:
 
   ```bash
-  npx ai-playwright ui
+  npx runora ui
   ```
 
 - Screenshot: ![Empty workspace](./images/cx/01-empty-workspace.png)
@@ -141,7 +141,7 @@ The developer describes what they want tested. AI Playwright plans browser actio
 
 ## 14. Restart UI
 
-- User action: stop the UI server and start it again with `npx ai-playwright ui`.
+- User action: stop the UI server and start it again with `npx runora ui`.
 - Screenshot: ![Suite history](./images/cx/10-suite-history.png)
 - What the user sees: the same workspace can be reopened without recreating tests or rerunning history.
 - What the system is doing: rehydrating the UI from filesystem-backed tests and suite-run records.
@@ -161,4 +161,4 @@ The developer describes what they want tested. AI Playwright plans browser actio
 - Real WebLLM acceptance path: `tests/e2e/real-runtime.e2e.ts`
 - Screenshot directory: `docs/images/cx/`
 
-The walkthrough is complete when someone unfamiliar with the repository can scan the screenshots above and understand the full path from “I have a web app I want to test” to “AI Playwright ran the browser flow, surfaced the failure, and saved the evidence.”
+The walkthrough is complete when someone unfamiliar with the repository can scan the screenshots above and understand the full path from “I have a web app I want to test” to “Runora ran the browser flow, surfaced the failure, and saved the evidence.”

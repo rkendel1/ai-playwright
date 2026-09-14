@@ -30,7 +30,7 @@ describe("Workspace E2E - Failure Diagnosis & Run Observability", () => {
     checkoutApp = await startCheckoutApp({ mode: "success" });
 
     // Create default config file
-    const configPath = path.join(workspaceDir, "ai-playwright.config.ts");
+    const configPath = path.join(workspaceDir, "runora.config.ts");
     const configContent = `export default {
   url: "${checkoutApp.url}",
   browser: "obscura",

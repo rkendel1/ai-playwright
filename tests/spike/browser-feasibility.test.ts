@@ -14,7 +14,7 @@ import {
 } from "../../packages/core/src/index.js";
 
 /**
- * Browser-Local AI Playwright Feasibility Spike
+ * Browser-Local Runora Feasibility Spike
  *
  * This test suite runs the actual feasibility experiments.
  * Results determine the PR #6 conclusion: BROWSER_LOCAL_PASS, BLOCKED, or FAIL.
@@ -300,7 +300,7 @@ function printCapabilityReport(
   if (allPass) {
     console.log("🎯 BROWSER_LOCAL_PASS");
     console.log(
-      "\nAI Playwright runs completely in-browser with no server required."
+      "\nRunora runs completely in-browser with no server required."
     );
     console.log("Architecture: WebLLM/WebGPU → aipw-core → browser execution");
   } else if (hasBlockers && !hasFails) {

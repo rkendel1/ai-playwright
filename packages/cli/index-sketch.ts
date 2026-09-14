@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * AI Playwright CLI Entry Point (Pseudocode Sketch)
+ * Runora CLI Entry Point (Pseudocode Sketch)
  *
  * Command line interface for browser-based test automation.
  *
  * Usage:
- *   npx ai-playwright "test checkout"
- *   npx ai-playwright --url http://localhost:3000 "test checkout"
- *   npx ai-playwright --url http://localhost:3000 --task "test checkout" --model gpt-4
+ *   npx runora "test checkout"
+ *   npx runora --url http://localhost:3000 "test checkout"
+ *   npx runora --url http://localhost:3000 --task "test checkout" --model gpt-4
  *
  * NOT PRODUCTION CODE — design sketch only
  * Real implementation in PR #8
@@ -52,7 +52,7 @@ async function main(): Promise<CliResult> {
     const options = parseArgs(process.argv.slice(2));
     validateOptions(options);
 
-    log(`🚀 AI Playwright CLI`, options.debug);
+    log(`🚀 Runora CLI`, options.debug);
     log(`   Task: ${options.task}`, options.debug);
     log(`   URL: ${options.url}`, options.debug);
     log(`   Model: ${options.model}`, options.debug);
@@ -239,7 +239,7 @@ function saveEvidence(taskResult: TaskResult, filePath: string): void {
 
 function generateEvidencePath(): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return path.join(process.cwd(), `.ai-playwright-results`, `${timestamp}.json`);
+  return path.join(process.cwd(), `.runora-results`, `${timestamp}.json`);
 }
 
 // ============================================================================
@@ -298,7 +298,7 @@ main()
  *    - Cache model downloads (if using local inference)
  *
  * 4. Evidence Output
- *    - Default: print summary to console, save JSON to .ai-playwright-results/
+ *    - Default: print summary to console, save JSON to .runora-results/
  *    - Support: --output to specify custom path
  *    - Support: --no-json to suppress file output
  *    - Consider: --output-format junit|json|html for CI/CD integrations

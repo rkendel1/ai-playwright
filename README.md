@@ -1,6 +1,16 @@
-# ai-playwright
+# Runora
 
-AI Playwright is a local-first browser automation runtime with a constrained action protocol.
+Runora is an evidence-first browser testing platform.
+
+Describe what you want verified in plain English. Runora uses AI to understand the task, while Playwright performs deterministic browser execution. Every action is constrained, validated, and traceable, and every failure produces the evidence needed to understand what actually happened.
+
+## Shortest path
+
+```bash
+npm create runora
+cd my-runora-project
+npx runora
+```
 
 ## MVP capabilities
 
@@ -25,13 +35,13 @@ npx playwright install --with-deps chromium
 npm test
 ```
 
-## The AI Playwright Experience
+## The Runora Experience
 
 Start from a clean workspace:
 
 ```bash
-npx ai-playwright init
-npx ai-playwright ui
+npx runora init
+npx runora ui
 ```
 
 Then the product flow is:
@@ -40,9 +50,11 @@ Create test
 ↓  
 Run test  
 ↓  
-AI plans browser actions  
+AI helps understand intent  
 ↓  
 Playwright executes against Obscura  
+↓  
+Runora records the proof  
 ↓  
 PASS / FAIL  
 ↓  
@@ -81,7 +93,7 @@ console.log(result);
 ### CLI
 
 ```bash
-npx tsx packages/cli/index.ts run --planner webllm --url http://localhost:3000 "Create a project called Demo and verify it appears"
+npx runora run --planner webllm --url http://localhost:3000 "Create a project called Demo and verify it appears"
 ```
 
 Use `--planner deterministic` only for deterministic local tests. The WebLLM planner does not fall back to deterministic behavior; if the local WebLLM model cannot initialize, the run fails clearly.
