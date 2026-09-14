@@ -81,7 +81,7 @@ describe("create-runora", () => {
       const packageJson = JSON.parse(fs.readFileSync(path.join(projectDir, "package.json"), "utf-8"));
       expect(packageJson.scripts.test).toBe("runora test");
       expect(packageJson.scripts.ui).toBe("runora ui");
-      expect(packageJson.dependencies.runora).toBe("^1.0.0");
+      expect(packageJson.dependencies.runora).toBe("^1.0.12");
       expect(fs.existsSync(path.join(projectDir, "runora.config.ts"))).toBe(true);
       expect(fs.readFileSync(path.join(projectDir, "README.md"), "utf-8")).toContain("Runora project");
       expect(fs.readFileSync(path.join(projectDir, "tests/example.test.ts"), "utf-8")).toContain("Example");

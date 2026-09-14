@@ -27,6 +27,7 @@ import {
   revealSecretProfile,
   deleteSecretProfile,
   closeWorkspaceStore,
+  subscribeWorkspaceChanges,
 } from "./index.js";
 import type { ResolvedConfig, TestDefinition } from "./index.js";
 import type { BrowserAction } from "../core/actions.js";
@@ -300,6 +301,13 @@ export async function startUIServer(
 ): Promise<http.Server> {
   currentConfig = await resolveConfig(workspaceDir);
 
+  const eventClients = new Set<http.ServerResponse>();
+  const publishWorkspaceChange = (collection: string) => {
+    const message = `event: workspace-change\ndata: ${JSON.stringify({ collection })}\n\n`;
+    for (const client of eventClients) client.write(message);
+  };
+  const unsubscribeWorkspace = subscribeWorkspaceChanges(currentConfig.artifacts, publishWorkspaceChange);
+
   const server = http.createServer(async (req, res) => {
     // The workspace owns local credentials. Reject cross-origin browser calls
     // so another website cannot operate the vault through localhost.
@@ -326,6 +334,18 @@ export async function startUIServer(
 
     const parsedUrl = url.parse(req.url || "/", true);
     const pathname = parsedUrl.pathname;
+
+    if (pathname === "/api/events" && req.method === "GET") {
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      });
+      res.write("retry: 2000\n\n");
+      eventClients.add(res);
+      req.once("close", () => eventClients.delete(res));
+      return;
+    }
 
     if (pathname?.startsWith("/api/webllm/model/")) {
       try {
@@ -856,7 +876,12 @@ export async function startUIServer(
     });
   });
 
-  server.once("close", () => { void closeWorkspaceStore(currentConfig.artifacts); });
+  server.once("close", () => {
+    unsubscribeWorkspace();
+    for (const client of eventClients) client.end();
+    eventClients.clear();
+    void closeWorkspaceStore(currentConfig.artifacts);
+  });
   return server;
 }
 

@@ -71,6 +71,25 @@ export async function flushWorkspaceStore(artifactsDir: string): Promise<void> {
   await pending.get(stateRoot(artifactsDir));
 }
 
+export function subscribeWorkspaceChanges(
+  artifactsDir: string,
+  listener: (collection: "runs" | "suite_runs" | "secrets") => void,
+): () => void {
+  const db = workspaceDatabase(artifactsDir);
+  const collections = (["runs", "suite_runs", "secrets"] as const).map((name) => {
+    const collection = db.collection<Record<string, unknown>>(name);
+    const unsubscribe = collection.subscribe(() => listener(name));
+    return { collection, unsubscribe };
+  });
+
+  return () => {
+    for (const { collection, unsubscribe } of collections) {
+      unsubscribe();
+      collection.close();
+    }
+  };
+}
+
 async function migrateJsonRecords(artifactsDir: string, prefix: string, collection: string): Promise<void> {
   if (!fs.existsSync(artifactsDir)) return;
   const target = workspaceDatabase(artifactsDir).collection<Record<string, unknown>>(collection);

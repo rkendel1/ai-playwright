@@ -2177,11 +2177,19 @@
     syncProviderFields();
 
     refresh();
-    setInterval(() => {
-      if (!state.isRunning && document.visibilityState === 'visible') {
-        refresh();
-      }
-    }, 3000);
+    const workspaceEvents = new EventSource('/api/events');
+    let reactiveRefreshQueued = false;
+    workspaceEvents.addEventListener('workspace-change', () => {
+      if (state.isRunning || document.visibilityState !== 'visible' || reactiveRefreshQueued) return;
+      reactiveRefreshQueued = true;
+      requestAnimationFrame(async () => {
+        try {
+          await refresh();
+        } finally {
+          reactiveRefreshQueued = false;
+        }
+      });
+    });
   </script>
   <script type="module" src="/browser-planner.js"></script>
 </body>

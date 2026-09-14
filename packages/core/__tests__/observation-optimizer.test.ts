@@ -26,6 +26,7 @@ const mockObservation: Observation = {
       id: "e1",
       role: "searchbox",
       name: "Search input field for queries",
+      bounds: { x: 100, y: 100, width: 400, height: 44 },
       state: { visible: true, enabled: true },
     },
     {

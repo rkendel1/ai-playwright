@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RateLimiter, rateLimiterPresets } from "../rate-limiter.js";
 
 describe("Rate Limiter", () => {
@@ -18,8 +18,12 @@ describe("Rate Limiter", () => {
       const limiter = new RateLimiter({ requestDelayMs: 100 });
       const start = Date.now();
 
-      await limiter.waitBeforeRequest();
-      await limiter.waitBeforeRequest();
+      const first = limiter.waitBeforeRequest();
+      await vi.advanceTimersByTimeAsync(100);
+      await first;
+      const second = limiter.waitBeforeRequest();
+      await vi.advanceTimersByTimeAsync(100);
+      await second;
 
       expect(Date.now() - start).toBeGreaterThanOrEqual(100);
     });
@@ -28,9 +32,9 @@ describe("Rate Limiter", () => {
       const limiter = new RateLimiter({ requestDelayMs: 500 });
       let delayApplied = 0;
 
-      vi.spyOn(global, "setTimeout").mockImplementation((cb: any, ms: number) => {
-        delayApplied = ms;
-        cb();
+      vi.spyOn(global, "setTimeout").mockImplementation((cb: (...args: any[]) => void, ms?: number, ...args: any[]) => {
+        delayApplied = ms ?? 0;
+        cb(...args);
         return 0 as any;
       });
 
@@ -119,15 +123,16 @@ describe("Rate Limiter", () => {
 
       const delays: number[] = [];
       vi.spyOn(global, "setTimeout").mockImplementation(
-        (cb: any, ms: number) => {
-          delays.push(ms);
-          cb();
+        (cb: (...args: any[]) => void, ms?: number, ...args: any[]) => {
+          delays.push(ms ?? 0);
+          cb(...args);
           return 0 as any;
         }
       );
 
       await limiter.waitBeforeRequest();
       await limiter.waitBeforeRequest(); // Triggers rate limit
+      await limiter.waitBeforeRequest(); // Applies the calculated backoff
 
       expect(delays.length).toBeGreaterThan(0);
     });
@@ -135,7 +140,6 @@ describe("Rate Limiter", () => {
     it("should cap backoff delay", async () => {
       const limiter = new RateLimiter({
         requestDelayMs: 0,
-        maxRequestsPerMinute: 1,
         backoffMultiplier: 10,
         maxRequestsPerMinute: 100, // Will never hit limit
       });

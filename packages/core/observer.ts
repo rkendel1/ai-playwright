@@ -4,6 +4,7 @@ export type ElementObservation = {
   id: string;
   role?: string;
   name?: string;
+  ariaLabel?: string;
   value?: string;
   inputType?: string;
   autocomplete?: string;
@@ -112,6 +113,7 @@ export async function observe(page: Page): Promise<Observation> {
         id,
         role,
         name,
+        ariaLabel: aria || undefined,
         value,
         inputType,
         autocomplete: el.getAttribute("autocomplete") || undefined,

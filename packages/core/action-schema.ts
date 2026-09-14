@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ElementLocator } from "./locator.js";
+import { locatorSchema, type ElementLocator } from "./locator.js";
 import type { ElementObservation, Observation } from "./observer.js";
 
 export type ActionRisk = "read" | "write" | "destructive";
@@ -86,21 +86,6 @@ export type ActionPolicy = {
   approval?: "never" | "destructive" | "all";
   allowedKeys?: string[];
 };
-
-const locatorSchema = z.object({
-  type: z.enum([
-    "id",
-    "observation",
-    "role",
-    "text",
-    "label",
-    "placeholder",
-    "name",
-    "semantic",
-    "xpath",
-    "css",
-  ]),
-}) as z.ZodSchema<ElementLocator>;
 
 const actionMetaSchema = {
   reason: z.string().optional(),
@@ -195,10 +180,10 @@ export const actionSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-export type ValidatedAction = z.infer<typeof actionSchema>;
+export type ValidatedAction = BrowserAction;
 
 export function validateAction(action: unknown): ValidatedAction {
-  return actionSchema.parse(action);
+  return actionSchema.parse(action) as BrowserAction;
 }
 
 export function actionRisk(action: BrowserAction, element?: ElementObservation): ActionRisk {

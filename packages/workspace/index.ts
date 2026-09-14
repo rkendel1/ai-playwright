@@ -31,6 +31,7 @@ export { ProviderPlanner, type ExternalProvider, type ProviderSettings } from ".
 export {
   workspaceDatabase,
   flushWorkspaceStore,
+  subscribeWorkspaceChanges,
   listStoredRecords,
   getStoredRecord,
   storeRunArtifacts,
