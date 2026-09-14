@@ -158,7 +158,7 @@ describe("workspace UI", () => {
     }
   });
 
-  it("renders suite empty state, history, and flakiness summary", async () => {
+  it("reactively renders suite history and flakiness without polling or reloading", async () => {
     createTestFile(path.join(workspaceDir, "tests"), "Checkout", "Verify checkout");
     uiServer = await startUIServer(workspaceDir, 0);
     await page!.goto(serverBaseUrl(uiServer));
@@ -171,8 +171,6 @@ describe("workspace UI", () => {
     await seedSuiteRun(workspaceDir, "passed", "Checkout", 30_000);
     await seedSuiteRun(workspaceDir, "failed", "Checkout", 20_000);
     await seedSuiteRun(workspaceDir, "passed", "Checkout", 10_000);
-
-    await page!.reload();
 
     await page!.getByText("Failed 2 of last 5 runs").waitFor();
     await page!.locator(".suite-run-card").first().waitFor();

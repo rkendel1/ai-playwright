@@ -101,6 +101,7 @@ export class RateLimiter {
 
   private enforceRequestDelay(): Promise<void> {
     const delay = this.config.requestDelayMs ?? 500;
+    if (delay <= 0) return Promise.resolve();
     return new Promise((resolve) => setTimeout(resolve, delay));
   }
 
@@ -121,6 +122,7 @@ export class RateLimiter {
         `[RateLimiter] Exceeded ${maxRequests} requests/minute. Waiting ${Math.ceil(waitTime / 1000)}s`
       );
       this.rateLimitUntil = now + waitTime;
+      this.isCurrentlyRateLimited = true;
     }
   }
 
@@ -165,36 +167,25 @@ export class PageRateLimitInterceptor {
   }
 
   async initialize(): Promise<void> {
-    await this.page.route("**/*", async (route, request) => {
+    this.page.on("response", (response) => {
+      const detection = this.rateLimiter.detectRateLimit(
+        response.status(),
+        this.parseHeaders(response.headers())
+      );
+      if (detection.isRateLimited) {
+        console.warn(
+          `[RateLimiter] Detected: ${detection.reason}`,
+          this.rateLimiter.getStats()
+        );
+      }
+    });
+
+    await this.page.route("**/*", async (route) => {
       await this.rateLimiter.waitBeforeRequest();
       try {
-        const response = await route.continue();
-        const detection = this.rateLimiter.detectRateLimit(
-          response.status(),
-          this.parseHeaders(response.headers())
-        );
-
-        if (detection.isRateLimited) {
-          console.warn(
-            `[RateLimiter] Detected: ${detection.reason}`,
-            this.rateLimiter.getStats()
-          );
-
-          if (response.status() === 429 || response.status() === 503) {
-            const retrySeconds = detection.retryAfterSeconds ?? 60;
-            console.warn(
-              `[RateLimiter] Waiting ${retrySeconds}s before retry...`
-            );
-            await new Promise((resolve) =>
-              setTimeout(resolve, retrySeconds * 1000)
-            );
-            return route.continue();
-          }
-        }
-        return response;
+        await route.continue();
       } catch (error) {
         console.error("[RateLimiter] Interception error:", error);
-        return route.continue();
       }
     });
   }

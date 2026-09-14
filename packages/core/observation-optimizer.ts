@@ -11,7 +11,7 @@ export type OptimizedObservation = Observation & {
 };
 
 export class ObservationOptimizer {
-  private tokenMultiplier = 0.00035; // Rough estimate: chars to tokens
+  private tokenMultiplier = 0.25; // Rough estimate: four characters per token
 
   constructor(private strategy: OptimizationStrategy = "balanced") {}
 
@@ -62,9 +62,9 @@ export class ObservationOptimizer {
     ];
     const originalCount = obs.elements.length;
 
-    obs.elements = obs.elements.filter((e) =>
-      criticalRoles.includes(e.role ?? "")
-    );
+    obs.elements = obs.elements
+      .filter((e) => criticalRoles.includes(e.role ?? ""))
+      .slice(0, Math.max(1, Math.floor(originalCount * 0.4)));
 
     if (obs.elements.length < originalCount) {
       notes.push(
@@ -123,6 +123,7 @@ export class ObservationOptimizer {
 
     // Shorten element names if too long
     obs.elements.forEach((e) => {
+      delete e.bounds;
       if (e.name && e.name.length > 100) {
         e.name = e.name.slice(0, 100) + "...";
       }
