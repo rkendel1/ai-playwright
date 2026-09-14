@@ -389,7 +389,7 @@ export class StepScheduler {
     // Create a click action and execute it
     const action: BrowserAction = {
       type: "click",
-      locator: { type: "text", selector: step.locator },
+      locator: { type: "text", text: step.locator },
     };
 
     await this.executor(action);
@@ -405,7 +405,7 @@ export class StepScheduler {
 
     const action: BrowserAction = {
       type: "fill",
-      locator: { type: "text", selector: step.locator },
+      locator: { type: "text", text: step.locator },
       value: step.value,
     };
 
@@ -528,7 +528,7 @@ export class StepScheduler {
 
     const action: BrowserAction = {
       type: "click",
-      locator: { type: "text", selector: step.locator },
+      locator: { type: "text", text: step.locator },
     };
 
     await this.executor(action);
@@ -544,7 +544,7 @@ export class StepScheduler {
 
     const action: BrowserAction = {
       type: "select",
-      locator: { type: "text", selector: step.locator },
+      locator: { type: "text", text: step.locator },
       value: step.value,
     };
 
@@ -606,7 +606,7 @@ export class StepScheduler {
       return false;
     }
 
-    const text = this.context.observation.text.toLowerCase();
+    const text = (this.context.observation.text ?? "").toLowerCase();
     return text.includes(condition.toLowerCase());
   }
 
