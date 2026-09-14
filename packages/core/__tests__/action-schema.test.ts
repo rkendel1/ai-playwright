@@ -10,8 +10,7 @@ describe("Action Schema", () => {
         reason: "Navigate to homepage",
       };
       const validated = validateAction(action);
-      expect(validated.type).toBe("goto");
-      expect(validated.url).toBe("https://example.com");
+      expect(validated).toMatchObject({ type: "goto", url: "https://example.com" });
     });
 
     it("should validate click action with semantic locator", () => {
@@ -24,8 +23,7 @@ describe("Action Schema", () => {
         reason: "Click search button",
       };
       const validated = validateAction(action);
-      expect(validated.type).toBe("click");
-      expect(validated.locator.type).toBe("semantic");
+      expect(validated).toMatchObject({ type: "click", locator: { type: "semantic" } });
     });
 
     it("should validate fill action with fallback locators", () => {
@@ -39,9 +37,8 @@ describe("Action Schema", () => {
         ],
       };
       const validated = validateAction(action);
-      expect(validated.type).toBe("fill");
-      expect(validated.value).toBe("test@example.com");
-      expect(validated.fallbackLocators).toHaveLength(2);
+      expect(validated).toMatchObject({ type: "fill", value: "test@example.com" });
+      expect("fallbackLocators" in validated ? validated.fallbackLocators : []).toHaveLength(2);
     });
 
     it("should validate assert action with text", () => {
@@ -53,8 +50,7 @@ describe("Action Schema", () => {
         },
       };
       const validated = validateAction(action);
-      expect(validated.type).toBe("assert");
-      expect(validated.assertion.type).toBe("textVisible");
+      expect(validated).toMatchObject({ type: "assert", assertion: { type: "textVisible" } });
     });
 
     it("should validate finish action", () => {
@@ -65,8 +61,7 @@ describe("Action Schema", () => {
         confidence: 0.95,
       };
       const validated = validateAction(action);
-      expect(validated.type).toBe("finish");
-      expect(validated.result).toBe("success");
+      expect(validated).toMatchObject({ type: "finish", result: "success" });
     });
 
     it("should validate blocked action", () => {

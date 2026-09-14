@@ -19,7 +19,7 @@ export type ElementMatch = {
   reason: string;
 };
 
-const locatorSchema = z.discriminatedUnion("type", [
+export const locatorSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("id"), elementId: z.string().min(1) }),
   z.object({
     type: z.literal("observation"),
@@ -239,7 +239,10 @@ function findBySemantic(
             e.ariaLabel?.toLowerCase().includes("search"))
       );
       if (candidates.length === 0) {
-        return observation.elements.find((e) => e.role === "searchbox") as ElementMatch || null;
+        const fallback = observation.elements.find((e) => e.role === "searchbox");
+        return fallback
+          ? { element: fallback, confidence: 0.8, reason: "Fallback to the first searchbox" }
+          : null;
       }
       return {
         element: candidates[0],
