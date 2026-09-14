@@ -263,11 +263,12 @@ describe("StepScheduler", () => {
       url: "https://example.com",
       elements: [],
       viewport: { width: 1280, height: 720, scrollX: 0, scrollY: 0, pageWidth: 1280, pageHeight: 3000 },
+      generation: 1,
     } as Observation);
 
     mockPlanner = vi.fn().mockResolvedValue({
       type: "click",
-      target: { locators: [{ strategy: "text", value: "button" }] },
+      locator: { type: "text", selector: "button" },
     } as BrowserAction);
 
     mockExecutor = vi.fn().mockResolvedValue(undefined);
@@ -416,13 +417,13 @@ describe("StepScheduler", () => {
 
     const scheduler = new StepScheduler(context, mockPlanner, mockExecutor, mockObserver);
 
-    const step = {
+    const step: TestStep = {
       id: "step-1",
       index: 0,
-      type: "click" as const,
+      type: "click",
       description: "Click button",
       locator: "button",
-      status: "pending" as const,
+      status: "pending",
     };
 
     await expect(scheduler.executeStep(step)).rejects.toThrow("Click failed");
@@ -433,13 +434,13 @@ describe("StepScheduler", () => {
   it("should track timing", async () => {
     const scheduler = new StepScheduler(context, mockPlanner, mockExecutor, mockObserver);
 
-    const step = {
+    const step: TestStep = {
       id: "step-1",
       index: 0,
-      type: "navigate" as const,
+      type: "navigate",
       description: "Navigate",
       value: "https://example.com",
-      status: "pending" as const,
+      status: "pending",
     };
 
     await scheduler.executeStep(step);
