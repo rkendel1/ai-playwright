@@ -2312,19 +2312,50 @@
       `).join('');
     }
 
+    async function recordAction(type, target, value, coordinates) {
+      if (!recordingSession || !recordingSession.sessionId || !recordingSession.isRecording) return;
+
+      try {
+        const response = await fetch('/api/recording/' + recordingSession.sessionId + '/record-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type, target, value, coordinates }),
+        });
+        if (response.ok) {
+          const payload = await readResponseBody(response);
+          // Action recorded on server, update UI
+          if (payload.actionCount) {
+            updateActionsList();
+          }
+        }
+      } catch (error) {
+        console.error('Error recording action:', error);
+      }
+    }
+
     async function stopRecording() {
       if (!recordingSession) return;
 
       recordingSession.isRecording = false;
       document.getElementById('start-recording-btn').disabled = false;
       document.getElementById('stop-recording-btn').disabled = true;
-      document.getElementById('recording-status').textContent = '⏹️ Recording stopped. Review and save below.';
+      document.getElementById('recording-status').textContent = '⏹️ Analyzing recording... Please wait...';
 
       if (recordingSession.sessionId) {
         try {
-          await fetch('/api/recording/' + recordingSession.sessionId + '/stop', { method: 'POST' });
+          const response = await fetch('/api/recording/' + recordingSession.sessionId + '/stop', { method: 'POST' });
+          const payload = await readResponseBody(response);
+
+          if (response.ok && payload.description) {
+            // Use AI-generated description from vision model
+            document.getElementById('record-test-description').value = payload.description;
+            document.getElementById('recording-status').textContent = `✓ Recording stopped. ${payload.actionCount} actions captured. Description generated using vision analysis.`;
+          } else {
+            document.getElementById('recording-status').textContent = `✓ Recording stopped. ${recordingSession.actions.length} actions captured.`;
+          }
         } catch (error) {
           console.error('Error stopping recording:', error);
+          document.getElementById('recording-status').textContent = '✓ Recording stopped.';
         }
       }
 
@@ -2332,8 +2363,8 @@
     }
 
     async function saveRecordedTest() {
-      if (!recordingSession || recordingSession.actions.length === 0) {
-        alert('No actions recorded');
+      if (!recordingSession) {
+        alert('No recording session');
         return;
       }
 
@@ -2346,9 +2377,8 @@
         return;
       }
 
-      // If no description provided, generate one from actions
       if (!description) {
-        description = generateTestDescription(recordingSession.actions);
+        description = 'Replay recorded user actions';
       }
 
       try {
@@ -2369,7 +2399,7 @@
         closeRecordMode();
         await refresh();
         setSelectedTest(payload.id);
-        showFeedback('Test saved from recording');
+        showFeedback('Test saved from recording with AI-enhanced description');
       } catch (error) {
         alert('Error saving test: ' + error);
       }
