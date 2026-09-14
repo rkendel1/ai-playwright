@@ -626,7 +626,7 @@ export class StepScheduler {
     // Check for "visible" assertions
     if (assertion_lower.includes("visible")) {
       const element = assertion_lower.match(/(.+)\s+visible/)?.[1];
-      if (element) {
+      if (element && observation.elements) {
         return observation.elements.some(
           (e) => e.name?.toLowerCase().includes(element) && e.state.visible
         );

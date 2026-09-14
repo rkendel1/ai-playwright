@@ -3,6 +3,7 @@ import { FlowParser, FlowOrchestrator, StepScheduler, type TestStep } from "../f
 import type { Page } from "playwright";
 import type { Observation } from "../observer.js";
 import type { BrowserAction } from "../action-schema.js";
+import type { TestStep } from "../flow-orchestrator.js";
 
 describe("FlowParser", () => {
   describe("parsing natural language steps", () => {
@@ -264,6 +265,7 @@ describe("StepScheduler", () => {
       url: "https://example.com",
       elements: [],
       viewport: { width: 1280, height: 720, scrollX: 0, scrollY: 0, pageWidth: 1280, pageHeight: 3000 },
+      generation: 1,
     } as Observation);
 
     mockPlanner = vi.fn().mockResolvedValue({
@@ -420,10 +422,10 @@ describe("StepScheduler", () => {
     const step: TestStep = {
       id: "step-1",
       index: 0,
-      type: "click" as const,
+      type: "click",
       description: "Click button",
       locator: "button",
-      status: "pending" as const,
+      status: "pending",
     };
 
     await expect(scheduler.executeStep(step)).rejects.toThrow("Click failed");
@@ -437,10 +439,10 @@ describe("StepScheduler", () => {
     const step: TestStep = {
       id: "step-1",
       index: 0,
-      type: "navigate" as const,
+      type: "navigate",
       description: "Navigate",
       value: "https://example.com",
-      status: "pending" as const,
+      status: "pending",
     };
 
     await scheduler.executeStep(step);

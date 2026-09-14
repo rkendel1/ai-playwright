@@ -5,7 +5,7 @@ describe("Action Schema", () => {
   describe("validation", () => {
     it("should validate goto action", () => {
       const action = {
-        type: "goto",
+        type: "goto" as const,
         url: "https://example.com",
         reason: "Navigate to homepage",
       };
@@ -15,37 +15,36 @@ describe("Action Schema", () => {
 
     it("should validate click action with semantic locator", () => {
       const action = {
-        type: "click",
+        type: "click" as const,
         locator: {
-          type: "semantic",
-          intent: "search-input",
+          type: "text" as const,
+          selector: "search-input",
         },
         reason: "Click search button",
       };
       const validated = validateAction(action);
-      expect(validated).toMatchObject({ type: "click", locator: { type: "semantic" } });
+      expect(validated).toMatchObject({ type: "click", locator: { type: "text" } });
     });
 
     it("should validate fill action with fallback locators", () => {
       const action = {
-        type: "fill",
-        locator: { type: "label", label: "Email" },
+        type: "fill" as const,
+        locator: { type: "text" as const, selector: "Email" },
         value: "test@example.com",
         fallbackLocators: [
-          { type: "placeholder", placeholder: "your@email.com" },
-          { type: "semantic", intent: "login-form" },
+          { type: "text" as const, selector: "your@email.com" },
         ],
       };
       const validated = validateAction(action);
       expect(validated).toMatchObject({ type: "fill", value: "test@example.com" });
-      expect("fallbackLocators" in validated ? validated.fallbackLocators : []).toHaveLength(2);
+      expect("fallbackLocators" in validated ? validated.fallbackLocators : []).toHaveLength(1);
     });
 
     it("should validate assert action with text", () => {
       const action = {
-        type: "assert",
+        type: "assert" as const,
         assertion: {
-          type: "textVisible",
+          type: "textVisible" as const,
           text: "Welcome to Dashboard",
         },
       };
@@ -55,8 +54,8 @@ describe("Action Schema", () => {
 
     it("should validate finish action", () => {
       const action = {
-        type: "finish",
-        result: "success",
+        type: "finish" as const,
+        result: "success" as const,
         reason: "Task completed successfully",
         confidence: 0.95,
       };
@@ -66,7 +65,7 @@ describe("Action Schema", () => {
 
     it("should validate blocked action", () => {
       const action = {
-        type: "blocked",
+        type: "blocked" as const,
         reason: "Could not locate search input",
         suggestion: "Try searching with keyboard shortcut",
       };
@@ -76,7 +75,7 @@ describe("Action Schema", () => {
 
     it("should reject invalid URL in goto", () => {
       const action = {
-        type: "goto",
+        type: "goto" as const,
         url: "not-a-url",
       };
       expect(() => validateAction(action)).toThrow();
@@ -84,8 +83,8 @@ describe("Action Schema", () => {
 
     it("should reject invalid key in press action", () => {
       const action = {
-        type: "press",
-        locator: { type: "id", elementId: "e1" },
+        type: "press" as const,
+        locator: { type: "text" as const, selector: "button" },
         key: "",
       };
       expect(() => validateAction(action)).toThrow();
