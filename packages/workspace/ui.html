@@ -972,11 +972,11 @@
       const trace = evidenceFiles(run).trace;
       if (errorType === 'target_blocked') {
         suggestions.push({ label: 'Inspect overlapping element', action: 'expand' });
-        suggestions.push({ label: 'Retry with force: true', action: 'copy', value: 'Consider retrying this Playwright click with force: true after verifying the overlap is safe.' });
-        suggestions.push({ label: 'Add explicit wait for actionability', action: 'copy', value: 'Add an explicit wait for the target element to become visible, enabled, and actionable before clicking.' });
+        suggestions.push({ label: 'Heal: force click candidate', action: 'heal', strategy: 'force-click' });
+        suggestions.push({ label: 'Heal: actionability wait candidate', action: 'heal', strategy: 'actionability-wait' });
       } else {
         suggestions.push({ label: 'Re-run with visual debugging', action: 'rerun' });
-        suggestions.push({ label: 'Promote this step to stable Playwright code', action: 'copy', value: 'Translate this failing step into stable Playwright code with explicit locators, waits, and assertions.' });
+        suggestions.push({ label: 'Draft Playwright promotion candidate', action: 'copy', value: 'Translate this step into a Playwright promotion candidate with explicit locators, waits, and assertions. Persist it only after human acceptance.' });
         if (trace) {
           suggestions.push({ label: 'View full trace', action: 'trace', value: trace.url });
         }
@@ -985,15 +985,37 @@
         <div class="section">
           <div class="section-header"><h3 class="section-title">Suggested Next Steps</h3></div>
           <div class="step-detail-card wide suggestion-card">
-            <div class="small-text">Context-aware follow-up actions based on the current failure.</div>
+            <div class="small-text">Context-aware candidates based on the current failure. Candidates preserve evidence and do not change the canonical test until accepted.</div>
             <div class="suggestion-list">
               ${suggestions.map((item) => {
                 if (item.action === 'rerun') return '<button class="suggestion-button" type="button" onclick="runTest()">' + escapeHtml(item.label) + '</button>';
                 if (item.action === 'expand') return '<button class="suggestion-button" type="button" onclick="expandStepObservation()">' + escapeHtml(item.label) + '</button>';
                 if (item.action === 'trace') return '<a class="suggestion-button inline-link" href="' + item.value + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(item.label) + '</a>';
+                if (item.action === 'heal') return '<button class="suggestion-button" type="button" onclick="createHealCandidate(&quot;' + escapeHtml(run.id) + '&quot;, &quot;' + escapeHtml(item.strategy) + '&quot;)">' + escapeHtml(item.label) + '</button>';
                 return '<button class="suggestion-button" type="button" onclick="copySuggestion(\'' + encodeURIComponent(item.value) + '\')">' + escapeHtml(item.label) + '</button>';
               }).join('')}
             </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderOwnershipLoop(run) {
+      const ownership = run?.ownership;
+      if (!ownership || ownership.kind !== 'heal-candidate') return '';
+      const accepted = ownership.accepted === true;
+      return `
+        <div class="section">
+          <div class="section-header"><h3 class="section-title">Heal Candidate</h3></div>
+          <div class="summary-grid">
+            <div class="summary-card"><span class="summary-label">Original failure</span><div class="summary-value mono">${escapeHtml(ownership.originalRunId)}</div></div>
+            <div class="summary-card"><span class="summary-label">Candidate</span><div class="summary-value">${escapeHtml(ownership.strategy || 'candidate')}</div></div>
+            <div class="summary-card"><span class="summary-label">Canonical test</span><div class="summary-value">${accepted ? 'Updated after acceptance' : 'Unchanged'}</div></div>
+            <div class="summary-card wide"><span class="summary-label">Contract</span><div class="summary-value">Previous failure evidence is preserved. This candidate becomes canonical only after Accept Fix.</div></div>
+          </div>
+          <div class="detail-actions">
+            <button class="secondary-button" type="button" onclick="viewRun('${escapeHtml(ownership.originalRunId)}')">View original failure</button>
+            <button class="primary-button" type="button" onclick="acceptHealCandidate('${escapeHtml(ownership.attemptId)}')" ${accepted ? 'disabled' : ''}>${accepted ? 'Accepted' : 'Accept Fix'}</button>
           </div>
         </div>
       `;
@@ -1455,6 +1477,8 @@
 
         ${renderSuggestions(run, step)}
 
+        ${renderOwnershipLoop(run)}
+
         <div class="section">
           <div class="section-header"><h3 class="section-title">Evidence</h3></div>
           <div class="suite-tests">
@@ -1627,6 +1651,51 @@
       state.selectedStepIndex = null;
       state.currentView = 'run';
       render();
+    }
+
+    async function createHealCandidate(runId, strategy) {
+      try {
+        const response = await fetch('/api/runs/' + runId + '/heal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ strategy }),
+        });
+        const payload = await readResponseBody(response);
+        if (!response.ok) {
+          alert('Error creating heal candidate: ' + (payload.error || response.statusText));
+          return;
+        }
+        showFeedback('Heal candidate verified. Original failure preserved.');
+        await refresh();
+        await viewRun(payload.candidateRunId);
+      } catch (error) {
+        alert('Error creating heal candidate: ' + error);
+      }
+    }
+
+    async function acceptHealCandidate(attemptId) {
+      if (!confirm('Accept this verified heal candidate and update the canonical test definition?')) return;
+      try {
+        const response = await fetch('/api/heals/' + attemptId + '/accept', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ acceptedBy: 'workspace-ui' }),
+        });
+        const payload = await readResponseBody(response);
+        if (!response.ok) {
+          alert('Error accepting heal candidate: ' + (payload.error || response.statusText));
+          return;
+        }
+        showFeedback('Heal accepted. Canonical test updated and deterministic verification recorded.');
+        await refresh();
+        if (payload.verificationRunId) {
+          await viewRun(payload.verificationRunId);
+        } else if (payload.candidateRunId) {
+          await viewRun(payload.candidateRunId);
+        }
+      } catch (error) {
+        alert('Error accepting heal candidate: ' + error);
+      }
     }
 
     async function runTest() {

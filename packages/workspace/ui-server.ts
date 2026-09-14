@@ -15,6 +15,8 @@ import {
   updateTest,
   deleteTest,
   getTest,
+  createHealCandidate,
+  acceptHealCandidate,
 } from "./index.js";
 import type { ResolvedConfig, TestDefinition } from "./index.js";
 
@@ -328,6 +330,43 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
       } catch (error) {
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Run not found" }));
+      }
+      return;
+    }
+
+    // API: Create non-mutating heal candidate from a failed run
+    if (pathname && pathname.match(/^\/api\/runs\/[^/]+\/heal$/) && req.method === "POST") {
+      try {
+        const runId = pathname.split("/")[3];
+        const body = await parseJsonBody(req);
+        const attempt = createHealCandidate(currentConfig.artifacts, currentConfig.tests, runId, {
+          strategy: body.strategy,
+          proposedTask: body.proposedTask,
+        });
+        res.writeHead(201, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(attempt));
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Unable to create heal candidate" }));
+      }
+      return;
+    }
+
+    // API: Explicitly accept a verified heal candidate, then rerun deterministically
+    if (pathname && pathname.match(/^\/api\/heals\/[^/]+\/accept$/) && req.method === "POST") {
+      try {
+        const attemptId = pathname.split("/")[3];
+        const body = await parseJsonBody(req);
+        const attempt = await acceptHealCandidate(currentConfig.artifacts, currentConfig.tests, attemptId, {
+          acceptedBy: body.acceptedBy || "workspace-ui",
+          verify: (test) => runTest(test, { ...currentConfig, planner: "deterministic", model: undefined }),
+        });
+        currentTests = await discoverTests(currentConfig.tests);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(attempt));
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Unable to accept heal candidate" }));
       }
       return;
     }

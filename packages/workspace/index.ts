@@ -28,6 +28,14 @@ export {
 } from "./suite-storage.js";
 export { runTest, runTests, runSuite, type RunResult } from "./runner.js";
 export {
+  createHealCandidate,
+  acceptHealCandidate,
+  loadHealAttempt,
+  type HealAttempt,
+  type HealAttemptStatus,
+  type HealStrategy,
+} from "./ownership-loop.js";
+export {
   type FailureDiagnosis,
   type FailurePhase,
   type FailureCategory,

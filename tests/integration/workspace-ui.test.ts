@@ -254,8 +254,22 @@ describe("workspace UI", () => {
     await page!.locator("#step-observation-details summary").click();
     await page!.getByText("button · Submit payment").waitFor();
     await page!.getByText("Inspect overlapping element").waitFor();
-    await page!.getByText("Retry with force: true").waitFor();
-    await page!.getByText("Add explicit wait for actionability").waitFor();
+    await page!.getByText("Candidates preserve evidence and do not change the canonical test until accepted").waitFor();
+    await page!.getByText("Heal: force click candidate").waitFor();
+    await page!.getByText("Heal: actionability wait candidate").click();
+    await page!.getByRole("heading", { name: "Heal Candidate", exact: true }).waitFor();
+    await page!.getByText("Canonical test").waitFor();
+    await page!.getByText("Unchanged").waitFor();
+    await page!.getByRole("button", { name: "Accept Fix" }).waitFor();
+
+    const testResponse = await page!.evaluate(async () => {
+      const response = await fetch("/api/tests/invalid-payment");
+      return response.json();
+    });
+    expect(testResponse.task).toBe("Verify invalid payment failure");
+
+    await page!.getByRole("button", { name: "View original failure" }).click();
+    await page!.getByText("Suggested Next Steps").waitFor();
     await page!.getByText("View full evidence").click();
     await page!.getByRole("link", { name: "captures/003-failure.png" }).waitFor();
     await page!.getByRole("link", { name: "trace.json" }).waitFor();
