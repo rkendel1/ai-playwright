@@ -36,7 +36,7 @@ async function createWorkspace(): Promise<string> {
   await fs.mkdir(path.join(workspaceDir, "tests"), { recursive: true });
   await fs.mkdir(path.join(workspaceDir, "artifacts"), { recursive: true });
   await fs.writeFile(
-    path.join(workspaceDir, "ai-playwright.config.ts"),
+    path.join(workspaceDir, "runora.config.ts"),
     `export default {
   url: "http://127.0.0.1:3000",
   planner: "deterministic",

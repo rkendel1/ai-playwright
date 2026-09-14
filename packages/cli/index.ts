@@ -8,15 +8,15 @@ import { initWorkspace, runTestCommand, listTestsCommand, startUICommand } from 
 import { CliPlannerAdapter } from "./adapters/CliPlannerAdapter.js";
 
 /**
- * AI Playwright CLI — PR #9 Workspace
+ * Runora CLI — PR #9 Workspace
  *
  * Two modes:
  * 1. Workspace mode (default):
- *    npx ai-playwright init
- *    npx ai-playwright test [name]
+ *    npx runora init
+ *    npx runora test [name]
  *
  * 2. One-shot mode (PR #8 compatibility):
- *    npx ai-playwright --url http://127.0.0.1:3000 "test checkout"
+ *    npx runora --url http://127.0.0.1:3000 "test checkout"
  *
  * Both modes use the same runner:
  * CLI → runner → CliPlannerAdapter → kernel → Playwright/Obscura
@@ -29,14 +29,14 @@ function parsePlanner(value: string | undefined): PlannerMode {
 
 export function parseArgs(args: string[]) {
   if (args[0] !== "run") {
-    throw new Error('Usage: aipw run --url <URL> [--planner webllm|deterministic] "task"');
+    throw new Error('Usage: runora run --url <URL> [--planner webllm|deterministic] "task"');
   }
 
   let url: string | undefined;
   let planner: PlannerMode = "webllm";
   let model: string | undefined;
   let headed = false;
-  let artifactsDir = path.join(process.cwd(), ".ai-playwright-results");
+  let artifactsDir = path.join(process.cwd(), ".runora-results");
   const instructionParts: string[] = [];
 
   for (let i = 1; i < args.length; i++) {
@@ -93,13 +93,13 @@ async function oneShotMode(options: ReturnType<typeof parseArgs>) {
   // Validate inputs
   if (!url) {
     console.error("Error: --url <URL> is required");
-    console.error("Usage: npx ai-playwright --url http://127.0.0.1:3000 \"test checkout\"");
+    console.error("Usage: npx runora --url http://127.0.0.1:3000 \"test checkout\"");
     process.exit(1);
   }
 
   if (!instruction) {
     console.error("Error: task description is required");
-    console.error("Usage: npx ai-playwright --url http://127.0.0.1:3000 \"test checkout\"");
+    console.error("Usage: npx runora --url http://127.0.0.1:3000 \"test checkout\"");
     process.exit(1);
   }
 
@@ -115,7 +115,7 @@ async function oneShotMode(options: ReturnType<typeof parseArgs>) {
     fs.mkdirSync(artifactsDir, { recursive: true });
   }
 
-  console.log("\nAI Playwright");
+  console.log("\nRunora");
   console.log(`Target:  ${url}`);
   console.log(`Task:    ${instruction}`);
   console.log(`Planner: ${planner === "webllm" ? "WebLLM" : "Deterministic"}`);
@@ -227,13 +227,13 @@ async function main() {
       process.exit(0);
     } else {
       console.error("Usage:");
-      console.error("  npx ai-playwright init                                           # Initialize workspace");
+      console.error("  npx runora init                                                  # Initialize workspace");
       console.error(
-        "  npx ai-playwright test [name] [--planner webllm|deterministic]   # Run test(s)"
+        "  npx runora test [name] [--planner webllm|deterministic]          # Run test(s)"
       );
-      console.error("  npx ai-playwright ui [port]                                      # Start UI server");
+      console.error("  npx runora ui [port]                                             # Start UI server");
       console.error(
-        "  npx ai-playwright run --url http://localhost:3000 \"task\"        # One-shot mode"
+        "  npx runora run --url http://localhost:3000 \"task\"               # One-shot mode"
       );
       process.exit(1);
     }

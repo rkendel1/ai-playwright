@@ -107,7 +107,7 @@ function renderConclusion(result: "PASS" | "BLOCKED" | "FAIL") {
   if (result === "PASS") {
     conclusionEl.innerHTML = `
       <strong>BROWSER_LOCAL_PASS</strong><br>
-      AI Playwright runs completely in-browser with no server required.
+      Runora runs completely in-browser with no server required.
       <br><br>
       Architecture: WebLLM/WebGPU → aipw-core → browser execution
     `;

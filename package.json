@@ -1,10 +1,10 @@
 {
-  "name": "ai-playwright",
+  "name": "runora",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Runora is an evidence-first browser testing platform that uses AI to understand what should be tested while Playwright executes and proves what actually happened.",
+  "main": "dist/packages/core/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && mkdir -p dist/packages/workspace && cp packages/workspace/ui.html dist/packages/workspace/ui.html",
     "build:wasm": "tsc -p tsconfig.wasm.json",
     "test": "vitest run",
     "dev": "tsx packages/cli/index.ts",
@@ -13,9 +13,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "http://localhost:26831/rkendel1/ai-playwright"
+    "url": "git+https://github.com/rkendel1/ai-playwright.git"
   },
-  "keywords": [],
+  "homepage": "https://github.com/rkendel1/ai-playwright#readme",
+  "keywords": [
+    "runora",
+    "browser-testing",
+    "playwright",
+    "testing",
+    "automation",
+    "evidence"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -30,7 +38,17 @@
     "vitest": "^5.0.0"
   },
   "type": "module",
+  "exports": {
+    ".": "./dist/packages/core/index.js",
+    "./workspace": "./dist/packages/workspace/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "bin": {
-    "aipw": "packages/cli/index.ts"
+    "runora": "dist/packages/cli/index.js",
+    "ai-playwright": "dist/packages/cli/index.js",
+    "aipw": "dist/packages/cli/index.js"
   }
 }

@@ -31,12 +31,12 @@ export async function initWorkspace(workspaceDir: string): Promise<void> {
   }
 
   // Create config file
-  const configPath = path.join(workspaceDir, "ai-playwright.config.ts");
+  const configPath = path.join(workspaceDir, "runora.config.ts");
   if (!fs.existsSync(configPath)) {
     fs.writeFileSync(configPath, createDefaultConfig(workspaceDir), "utf-8");
   }
 
-  console.log("✓ AI Playwright workspace initialized");
+  console.log("✓ Runora workspace initialized");
   console.log(`  Config: ${configPath}`);
   console.log(`  Tests: ${testsDir}`);
   console.log(`  Artifacts: ${artifactsDir}`);
@@ -53,7 +53,7 @@ export async function runTestCommand(
     model: options?.model,
   });
 
-  console.log("\nAI Playwright");
+  console.log("\nRunora");
   console.log(`Workspace: ${workspaceDir}`);
   console.log(`Config: ${config.url || "default"}\n`);
   console.log(`Planner: ${config.planner === "webllm" ? "WebLLM" : "Deterministic"}`);

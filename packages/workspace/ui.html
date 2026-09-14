@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Playwright</title>
+  <title>Runora</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -580,9 +580,9 @@
   <div class="container">
     <div class="header">
       <div>
-        <p class="eyebrow">AI Playwright</p>
+        <p class="eyebrow">Runora</p>
         <h1>Visible end-to-end browser testing</h1>
-        <p class="subtitle">Describe what you want tested. AI Playwright plans the browser actions, executes them against a real browser, and preserves evidence when something goes wrong.</p>
+        <p class="subtitle">Describe what you want tested. Runora plans the browser actions, executes them against a real browser, and preserves evidence when something goes wrong.</p>
       </div>
       <div class="runtime-truth">
         <div><span>Planner</span><strong>WebLLM / Deterministic</strong></div>
@@ -629,7 +629,7 @@
         <div>
           <p id="new-test-mode" class="eyebrow" style="margin-bottom: 6px;">Create Test</p>
           <h2 id="new-test-title" style="margin-bottom: 8px;">New Test</h2>
-          <p class="muted" id="new-test-description">Create a new AI Playwright workspace test.</p>
+          <p class="muted" id="new-test-description">Create a new Runora workspace test.</p>
         </div>
       </div>
       <div class="form-grid">
@@ -1118,7 +1118,7 @@
     function renderWelcome() {
       document.getElementById('result-content').innerHTML = `
         <div class="placeholder">
-          <h3>Canonical AI Playwright journey</h3>
+          <h3>Canonical Runora journey</h3>
           <p>Initialize a clean workspace, create tests, run an individual journey, inspect evidence, run the full suite, and return later to the saved history.</p>
         </div>
       `;
@@ -1228,7 +1228,7 @@
         <div class="split-header">
           <div>
             <h2 style="margin-bottom: 6px;">${escapeHtml(running.name)}</h2>
-            <p class="muted">AI Playwright is actively planning and executing this test.</p>
+            <p class="muted">Runora is actively planning and executing this test.</p>
           </div>
           <span class="status-pill running">Running</span>
         </div>
@@ -1551,7 +1551,7 @@
       state.editTestId = null;
       document.getElementById('new-test-mode').textContent = 'Create Test';
       document.getElementById('new-test-title').textContent = 'New Test';
-      document.getElementById('new-test-description').textContent = 'Create a new AI Playwright workspace test.';
+      document.getElementById('new-test-description').textContent = 'Create a new Runora workspace test.';
       document.getElementById('new-test-name').value = '';
       document.getElementById('new-test-url').value = 'http://127.0.0.1:3000';
       document.getElementById('new-test-task').value = '';

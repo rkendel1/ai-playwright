@@ -14,7 +14,7 @@ describe("workspace config", () => {
   it("loads explicit WebLLM planner and model configuration", async () => {
     await fs.mkdir(workspaceDir, { recursive: true });
     await fs.writeFile(
-      path.join(workspaceDir, "ai-playwright.config.ts"),
+      path.join(workspaceDir, "runora.config.ts"),
       `export default {
   url: "http://127.0.0.1:3000",
   planner: "webllm",
@@ -39,7 +39,7 @@ describe("workspace config", () => {
   it("does not execute JavaScript while loading TypeScript config", async () => {
     await fs.mkdir(workspaceDir, { recursive: true });
     await fs.writeFile(
-      path.join(workspaceDir, "ai-playwright.config.ts"),
+      path.join(workspaceDir, "runora.config.ts"),
       `export default {
   url: ((globalThis as any).__aipwEvalProbe = "executed"),
 };`,
@@ -49,5 +49,42 @@ describe("workspace config", () => {
     await resolveConfig(workspaceDir);
 
     expect((globalThis as typeof globalThis & { __aipwEvalProbe?: string }).__aipwEvalProbe).toBeUndefined();
+  });
+
+  it("keeps legacy ai-playwright config compatibility", async () => {
+    await fs.mkdir(workspaceDir, { recursive: true });
+    await fs.writeFile(
+      path.join(workspaceDir, "ai-playwright.config.ts"),
+      `export default {
+  url: "http://127.0.0.1:4000",
+};`,
+      "utf-8",
+    );
+
+    await expect(resolveConfig(workspaceDir)).resolves.toMatchObject({
+      url: "http://127.0.0.1:4000",
+    });
+  });
+
+  it("prefers canonical runora config over legacy config", async () => {
+    await fs.mkdir(workspaceDir, { recursive: true });
+    await fs.writeFile(
+      path.join(workspaceDir, "ai-playwright.config.ts"),
+      `export default {
+  url: "http://127.0.0.1:4000",
+};`,
+      "utf-8",
+    );
+    await fs.writeFile(
+      path.join(workspaceDir, "runora.config.ts"),
+      `export default {
+  url: "http://127.0.0.1:5000",
+};`,
+      "utf-8",
+    );
+
+    await expect(resolveConfig(workspaceDir)).resolves.toMatchObject({
+      url: "http://127.0.0.1:5000",
+    });
   });
 });

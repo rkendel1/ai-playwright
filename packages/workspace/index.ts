@@ -1,5 +1,5 @@
 /**
- * AI Playwright Workspace
+ * Runora Workspace
  * Single execution path for CLI and UI
  */
 

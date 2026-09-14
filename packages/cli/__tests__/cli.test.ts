@@ -9,7 +9,7 @@ describe("CLI Integration", () => {
   let server: http.Server;
   const PORT = 9999;
   const BASE_URL = `http://127.0.0.1:${PORT}`;
-  const RESULTS_DIR = path.join(process.cwd(), ".ai-playwright-results-test");
+  const RESULTS_DIR = path.join(process.cwd(), ".runora-results-test");
 
   beforeAll(async () => {
     // Clean up results directory
@@ -63,7 +63,7 @@ describe("CLI Integration", () => {
           expect(code).toBe(0);
 
           // Check output contains expected markers
-          expect(output).toContain("AI Playwright");
+          expect(output).toContain("Runora");
           expect(output).toContain(BASE_URL);
           expect(output).toContain("test checkout");
           expect(output.toUpperCase()).toContain("PASSED");
