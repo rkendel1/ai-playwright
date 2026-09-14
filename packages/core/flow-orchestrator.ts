@@ -389,9 +389,7 @@ export class StepScheduler {
     // Create a click action and execute it
     const action: BrowserAction = {
       type: "click",
-      target: {
-        locators: [{ strategy: "text", value: step.locator }],
-      },
+      locator: { type: "text", text: step.locator },
     };
 
     await this.executor(action);
@@ -407,9 +405,12 @@ export class StepScheduler {
 
     const action: BrowserAction = {
       type: "fill",
-      target: {
-        locators: [{ strategy: "text", value: step.locator }],
-      },
+      locator: { type: "label", label: step.locator },
+      fallbackLocators: [
+        { type: "placeholder", placeholder: step.locator },
+        { type: "name", name: step.locator },
+        { type: "text", text: step.locator },
+      ],
       value: step.value,
     };
 
@@ -532,9 +533,7 @@ export class StepScheduler {
 
     const action: BrowserAction = {
       type: "click",
-      target: {
-        locators: [{ strategy: "text", value: step.locator }],
-      },
+      locator: { type: "text", text: step.locator },
     };
 
     await this.executor(action);
@@ -550,9 +549,11 @@ export class StepScheduler {
 
     const action: BrowserAction = {
       type: "select",
-      target: {
-        locators: [{ strategy: "text", value: step.locator }],
-      },
+      locator: { type: "label", label: step.locator },
+      fallbackLocators: [
+        { type: "name", name: step.locator },
+        { type: "text", text: step.locator },
+      ],
       value: step.value,
     };
 
@@ -614,12 +615,12 @@ export class StepScheduler {
       return false;
     }
 
-    const text = this.context.observation.text.toLowerCase();
+    const text = (this.context.observation.text ?? "").toLowerCase();
     return text.includes(condition.toLowerCase());
   }
 
   private evaluateAssertion(assertion: string, observation: Observation): boolean {
-    const text = observation.text.toLowerCase();
+    const text = (observation.text ?? "").toLowerCase();
     const assertion_lower = assertion.toLowerCase();
 
     // Check for "visible" assertions

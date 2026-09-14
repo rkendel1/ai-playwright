@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { FlowParser, FlowOrchestrator, StepScheduler } from "../flow-orchestrator.js";
+import { FlowParser, FlowOrchestrator, StepScheduler, type TestStep } from "../flow-orchestrator.js";
 import type { Page } from "playwright";
 import type { Observation } from "../observer.js";
 import type { BrowserAction } from "../action-schema.js";
@@ -258,6 +258,7 @@ describe("StepScheduler", () => {
 
     mockObserver = vi.fn().mockResolvedValue({
       id: "obs-1",
+      generation: 1,
       text: "Test content",
       title: "Test Page",
       url: "https://example.com",
@@ -267,7 +268,7 @@ describe("StepScheduler", () => {
 
     mockPlanner = vi.fn().mockResolvedValue({
       type: "click",
-      target: { locators: [{ strategy: "text", value: "button" }] },
+      locator: { type: "text", text: "button" },
     } as BrowserAction);
 
     mockExecutor = vi.fn().mockResolvedValue(undefined);
@@ -323,7 +324,7 @@ describe("StepScheduler", () => {
     expect(mockExecutor).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "click",
-        target: expect.any(Object),
+        locator: expect.any(Object),
       })
     );
     expect(step.status).toBe("success");
@@ -332,7 +333,7 @@ describe("StepScheduler", () => {
   it("should execute fill steps", async () => {
     const scheduler = new StepScheduler(context, mockPlanner, mockExecutor, mockObserver);
 
-    const step = {
+    const step: TestStep = {
       id: "step-1",
       index: 0,
       type: "fill" as const,
@@ -358,7 +359,7 @@ describe("StepScheduler", () => {
 
     const scheduler = new StepScheduler(context, mockPlanner, mockExecutor, mockObserver);
 
-    const step = {
+    const step: TestStep = {
       id: "step-1",
       index: 0,
       type: "wait" as const,
@@ -416,7 +417,7 @@ describe("StepScheduler", () => {
 
     const scheduler = new StepScheduler(context, mockPlanner, mockExecutor, mockObserver);
 
-    const step = {
+    const step: TestStep = {
       id: "step-1",
       index: 0,
       type: "click" as const,
@@ -433,7 +434,7 @@ describe("StepScheduler", () => {
   it("should track timing", async () => {
     const scheduler = new StepScheduler(context, mockPlanner, mockExecutor, mockObserver);
 
-    const step = {
+    const step: TestStep = {
       id: "step-1",
       index: 0,
       type: "navigate" as const,
@@ -466,6 +467,7 @@ describe("FlowOrchestrator", () => {
     const mockExecutor = vi.fn();
     const mockObserver = vi.fn().mockResolvedValue({
       id: "obs-1",
+      generation: 1,
       text: "Test",
       title: "Test",
       url: "https://example.com",
