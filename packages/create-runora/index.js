@@ -9,6 +9,7 @@ const install = !args.includes("--no-install");
 const filteredArgs = args.filter((arg) => arg !== "--no-install");
 const projectName = filteredArgs[0] || "my-runora-project";
 const projectDir = path.resolve(process.cwd(), projectName);
+const runoraPackageSpec = process.env.RUNORA_PACKAGE_SPEC || "^1.0.0";
 
 if (fs.existsSync(projectDir) && fs.readdirSync(projectDir).length > 0) {
   console.error(`Directory already exists and is not empty: ${projectDir}`);
@@ -30,7 +31,7 @@ fs.writeFileSync(
         ui: "runora ui",
       },
       dependencies: {
-        runora: "^1.0.0",
+        runora: runoraPackageSpec,
       },
     },
     null,
