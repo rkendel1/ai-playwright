@@ -61,11 +61,6 @@ import { aiPlaywright } from "./packages/core/index.js";
 
 const browser = await aiPlaywright({
   browser: "obscura",
-  planner: "webllm",
-  model: {
-    provider: "webllm",
-    model: "Llama-3.2-1B-Instruct-q4f16_1-MLC",
-  },
   url: "http://localhost:3000",
 });
 
@@ -81,21 +76,17 @@ console.log(result);
 ### CLI
 
 ```bash
-npx tsx packages/cli/index.ts run --planner webllm --url http://localhost:3000 "Create a project called Demo and verify it appears"
+npx tsx packages/cli/index.ts run --url http://localhost:3000 "Create a project called Demo and verify it appears"
 ```
 
-Use `--planner deterministic` only for deterministic local tests. The WebLLM planner does not fall back to deterministic behavior; if the local WebLLM model cannot initialize, the run fails clearly.
+AI Playwright defaults to the deterministic planner for local reliability. Use `--planner webllm` only when you explicitly want local WebLLM inference; the WebLLM planner does not fall back to deterministic behavior if the model cannot initialize.
 
 ### Workspace config
 
 ```ts
 export default {
   url: "http://127.0.0.1:3000",
-  planner: "webllm",
-  model: {
-    provider: "webllm",
-    model: "Llama-3.2-1B-Instruct-q4f16_1-MLC",
-  },
+  planner: "deterministic",
 };
 ```
 

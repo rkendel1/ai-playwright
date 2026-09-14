@@ -38,7 +38,7 @@ function modelName(modelOption: AiPlaywrightOptions["model"]): string | undefine
 
 function createPlanner(options: AiPlaywrightOptions): Planner {
   if (typeof options.planner === "object") return options.planner;
-  const mode = options.planner ?? "webllm";
+  const mode = options.planner ?? "deterministic";
   if (mode === "deterministic" || mode === "mock") return new MockPlanner();
   if (mode === "webllm") return new WebLLMPlannerAdapter({ model: modelName(options.model) });
   throw new Error(`Unsupported planner '${mode}'.`);

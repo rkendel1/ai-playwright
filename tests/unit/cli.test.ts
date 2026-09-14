@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { parseArgs } from "../../packages/cli/index.js";
 
 describe("CLI parseArgs", () => {
-  it("parses run instruction with --url", () => {
+  it("defaults run instructions to the deterministic planner", () => {
     const parsed = parseArgs(["run", "--url", "http://localhost:3000", "Create", "Demo"]);
     expect(parsed).toEqual({
       url: "http://localhost:3000",
-      planner: "webllm",
+      planner: "deterministic",
       model: undefined,
       instruction: "Create Demo",
       headed: false,

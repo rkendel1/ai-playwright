@@ -972,11 +972,11 @@
       const trace = evidenceFiles(run).trace;
       if (errorType === 'target_blocked') {
         suggestions.push({ label: 'Inspect overlapping element', action: 'expand' });
-        suggestions.push({ label: 'Retry with force: true', action: 'copy', value: 'Consider retrying this Playwright click with force: true after verifying the overlap is safe.' });
-        suggestions.push({ label: 'Add explicit wait for actionability', action: 'copy', value: 'Add an explicit wait for the target element to become visible, enabled, and actionable before clicking.' });
+        suggestions.push({ label: 'Draft heal candidate: force click', action: 'copy', value: 'Create a heal candidate that retries this Playwright click with force: true after verifying the overlap is safe. Preserve the original failure evidence and apply it only after explicit acceptance.' });
+        suggestions.push({ label: 'Draft heal candidate: actionability wait', action: 'copy', value: 'Create a heal candidate that adds an explicit wait for the target element to become visible, enabled, and actionable before clicking. Preserve the original failure evidence and apply it only after explicit acceptance.' });
       } else {
         suggestions.push({ label: 'Re-run with visual debugging', action: 'rerun' });
-        suggestions.push({ label: 'Promote this step to stable Playwright code', action: 'copy', value: 'Translate this failing step into stable Playwright code with explicit locators, waits, and assertions.' });
+        suggestions.push({ label: 'Draft Playwright promotion candidate', action: 'copy', value: 'Translate this step into a Playwright promotion candidate with explicit locators, waits, and assertions. Persist it only after human acceptance.' });
         if (trace) {
           suggestions.push({ label: 'View full trace', action: 'trace', value: trace.url });
         }
@@ -985,7 +985,7 @@
         <div class="section">
           <div class="section-header"><h3 class="section-title">Suggested Next Steps</h3></div>
           <div class="step-detail-card wide suggestion-card">
-            <div class="small-text">Context-aware follow-up actions based on the current failure.</div>
+            <div class="small-text">Context-aware candidates based on the current failure. Candidates preserve evidence and do not change the canonical test until accepted.</div>
             <div class="suggestion-list">
               ${suggestions.map((item) => {
                 if (item.action === 'rerun') return '<button class="suggestion-button" type="button" onclick="runTest()">' + escapeHtml(item.label) + '</button>';
