@@ -405,7 +405,12 @@ export class StepScheduler {
 
     const action: BrowserAction = {
       type: "fill",
-      locator: { type: "text", text: step.locator },
+      locator: { type: "label", label: step.locator },
+      fallbackLocators: [
+        { type: "placeholder", placeholder: step.locator },
+        { type: "name", name: step.locator },
+        { type: "text", text: step.locator },
+      ],
       value: step.value,
     };
 
@@ -544,7 +549,11 @@ export class StepScheduler {
 
     const action: BrowserAction = {
       type: "select",
-      locator: { type: "text", text: step.locator },
+      locator: { type: "label", label: step.locator },
+      fallbackLocators: [
+        { type: "name", name: step.locator },
+        { type: "text", text: step.locator },
+      ],
       value: step.value,
     };
 
