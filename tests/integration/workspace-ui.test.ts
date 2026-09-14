@@ -254,8 +254,9 @@ describe("workspace UI", () => {
     await page!.locator("#step-observation-details summary").click();
     await page!.getByText("button · Submit payment").waitFor();
     await page!.getByText("Inspect overlapping element").waitFor();
-    await page!.getByText("Retry with force: true").waitFor();
-    await page!.getByText("Add explicit wait for actionability").waitFor();
+    await page!.getByText("Candidates preserve evidence and do not change the canonical test until accepted").waitFor();
+    await page!.getByText("Draft heal candidate: force click").waitFor();
+    await page!.getByText("Draft heal candidate: actionability wait").waitFor();
     await page!.getByText("View full evidence").click();
     await page!.getByRole("link", { name: "captures/003-failure.png" }).waitFor();
     await page!.getByRole("link", { name: "trace.json" }).waitFor();
