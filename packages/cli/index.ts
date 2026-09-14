@@ -33,7 +33,7 @@ export function parseArgs(args: string[]) {
   }
 
   let url: string | undefined;
-  let planner: PlannerMode = "deterministic";
+  let planner: PlannerMode = "webllm";
   let model: string | undefined;
   let headed = false;
   let artifactsDir = path.join(process.cwd(), ".ai-playwright-results");

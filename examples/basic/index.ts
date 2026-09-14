@@ -3,6 +3,7 @@ import { aiPlaywright } from "../../packages/core/index.js";
 async function demo() {
   const browser = await aiPlaywright({
     browser: "obscura",
+    model: "webllm",
     headless: false,
     url: "http://localhost:3000",
   });
