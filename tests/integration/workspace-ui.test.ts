@@ -88,10 +88,20 @@ async function seedRunWithArtifacts(options: {
   testName: string;
   status: "passed" | "failed";
   screenshot?: boolean;
+  screenshotPath?: string;
   step: any;
   evidence?: any[];
 }) {
-  const { workspaceDir, testId, testName, status, screenshot = false, step, evidence = [] } = options;
+  const {
+    workspaceDir,
+    testId,
+    testName,
+    status,
+    screenshot = false,
+    screenshotPath = "003-failure.png",
+    step,
+    evidence = [],
+  } = options;
   const { runId } = createRun(
     artifactsDir(workspaceDir),
     testId,
@@ -104,7 +114,9 @@ async function seedRunWithArtifacts(options: {
   await fs.mkdir(taskDir, { recursive: true });
   await fs.writeFile(path.join(taskDir, "trace.json"), JSON.stringify({ steps: [step] }, null, 2), "utf-8");
   if (screenshot) {
-    await fs.writeFile(path.join(taskDir, "003-failure.png"), tinyPng);
+    const screenshotFile = path.join(taskDir, screenshotPath);
+    await fs.mkdir(path.dirname(screenshotFile), { recursive: true });
+    await fs.writeFile(screenshotFile, tinyPng);
   }
   updateRun(artifactsDir(workspaceDir), runId, {
     status,
@@ -175,6 +187,7 @@ describe("workspace UI", () => {
       testName: "Invalid Payment",
       status: "failed",
       screenshot: true,
+      screenshotPath: "captures/003-failure.png",
       step: {
         index: 4,
         observation: {
@@ -244,7 +257,7 @@ describe("workspace UI", () => {
     await page!.getByText("Retry with force: true").waitFor();
     await page!.getByText("Add explicit wait for actionability").waitFor();
     await page!.getByText("View full evidence").click();
-    await page!.getByRole("link", { name: "003-failure.png" }).waitFor();
+    await page!.getByRole("link", { name: "captures/003-failure.png" }).waitFor();
     await page!.getByRole("link", { name: "trace.json" }).waitFor();
   });
 

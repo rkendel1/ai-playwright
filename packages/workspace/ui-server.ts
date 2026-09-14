@@ -63,11 +63,7 @@ function evidenceManifest(run: any) {
     };
   }
 
-  const files = fs
-    .readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => entry.name)
-    .sort();
+  const files = listEvidenceFiles(directory);
 
   const screenshots = files
     .filter((file) => /\.(png|jpe?g|webp)$/i.test(file))
@@ -97,10 +93,26 @@ function resolveEvidenceFile(run: any, fileName: string): string | null {
   }
   const resolvedDir = path.resolve(directory);
   const resolvedFile = path.resolve(directory, fileName);
-  if (path.dirname(resolvedFile) !== resolvedDir || !fs.existsSync(resolvedFile)) {
+  if (
+    (resolvedFile !== resolvedDir && !resolvedFile.startsWith(`${resolvedDir}${path.sep}`)) ||
+    !fs.existsSync(resolvedFile)
+  ) {
     return null;
   }
   return resolvedFile;
+}
+
+function listEvidenceFiles(directory: string, prefix: string = ""): string[] {
+  return fs
+    .readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const relativePath = prefix ? path.posix.join(prefix, entry.name) : entry.name;
+      if (entry.isDirectory()) {
+        return listEvidenceFiles(path.join(directory, entry.name), relativePath);
+      }
+      return [relativePath];
+    })
+    .sort();
 }
 
 async function parseJsonBody(req: http.IncomingMessage): Promise<any> {

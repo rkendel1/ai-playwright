@@ -440,6 +440,27 @@
       background: #fff7f7;
       border-color: #f1c0c0;
     }
+    .status-toast {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      max-width: min(420px, calc(100vw - 48px));
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid #dce6f5;
+      background: #ffffff;
+      box-shadow: 0 16px 32px rgba(16, 35, 63, 0.16);
+      color: #10233f;
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      z-index: 1100;
+    }
+    .status-toast.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
     .suggestion-button {
       background: #ffffff;
       border: 1px solid #d9e3f3;
@@ -632,6 +653,8 @@
     </div>
   </div>
 
+  <div id="feedback-region" class="status-toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
   <script>
     const state = {
       tests: [],
@@ -646,6 +669,7 @@
       runningSuite: null,
       editTestId: null,
     };
+    let feedbackTimer = null;
 
     function escapeHtml(value) {
       return String(value ?? '')
@@ -889,12 +913,25 @@
       `;
     }
 
+    function showFeedback(message, detail) {
+      const region = document.getElementById('feedback-region');
+      if (!region) return;
+      region.innerHTML = `<strong>${escapeHtml(message)}</strong>${detail ? `<div class="small-text mono" style="margin-top: 8px;">${escapeHtml(detail)}</div>` : ''}`;
+      region.classList.add('visible');
+      if (feedbackTimer) clearTimeout(feedbackTimer);
+      feedbackTimer = setTimeout(() => {
+        region.classList.remove('visible');
+      }, 4000);
+    }
+
     async function copySuggestion(text) {
+      const decoded = decodeURIComponent(text);
       try {
-        await navigator.clipboard.writeText(decodeURIComponent(text));
-        alert('Suggestion copied to clipboard.');
+        if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+        await navigator.clipboard.writeText(decoded);
+        showFeedback('Suggestion copied to clipboard.');
       } catch {
-        alert(decodeURIComponent(text));
+        showFeedback('Copy this suggestion manually:', decoded);
       }
     }
 
