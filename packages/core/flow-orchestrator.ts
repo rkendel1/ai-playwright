@@ -389,9 +389,7 @@ export class StepScheduler {
     // Create a click action and execute it
     const action: BrowserAction = {
       type: "click",
-      target: {
-        locators: [{ strategy: "text", value: step.locator }],
-      },
+      locator: { type: "text", selector: step.locator },
     };
 
     await this.executor(action);
@@ -407,9 +405,7 @@ export class StepScheduler {
 
     const action: BrowserAction = {
       type: "fill",
-      target: {
-        locators: [{ strategy: "text", value: step.locator }],
-      },
+      locator: { type: "text", selector: step.locator },
       value: step.value,
     };
 
@@ -532,9 +528,7 @@ export class StepScheduler {
 
     const action: BrowserAction = {
       type: "click",
-      target: {
-        locators: [{ strategy: "text", value: step.locator }],
-      },
+      locator: { type: "text", selector: step.locator },
     };
 
     await this.executor(action);
@@ -550,9 +544,7 @@ export class StepScheduler {
 
     const action: BrowserAction = {
       type: "select",
-      target: {
-        locators: [{ strategy: "text", value: step.locator }],
-      },
+      locator: { type: "text", selector: step.locator },
       value: step.value,
     };
 
@@ -619,13 +611,13 @@ export class StepScheduler {
   }
 
   private evaluateAssertion(assertion: string, observation: Observation): boolean {
-    const text = observation.text.toLowerCase();
+    const text = (observation.text ?? "").toLowerCase();
     const assertion_lower = assertion.toLowerCase();
 
     // Check for "visible" assertions
     if (assertion_lower.includes("visible")) {
       const element = assertion_lower.match(/(.+)\s+visible/)?.[1];
-      if (element) {
+      if (element && observation.elements) {
         return observation.elements.some(
           (e) => e.name?.toLowerCase().includes(element) && e.state.visible
         );
