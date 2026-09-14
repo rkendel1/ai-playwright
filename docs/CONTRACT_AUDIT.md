@@ -6,7 +6,7 @@ Verify that PR #7's architectural sketches (adapters, CLI design) actually work 
 
 **Scenario being audited:**
 ```bash
-$ npx ai-playwright --url http://localhost:3000 "test checkout"
+$ npx runora --url http://localhost:3000 "test checkout"
 ```
 
 ---

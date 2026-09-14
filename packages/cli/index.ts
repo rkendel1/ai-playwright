@@ -197,7 +197,20 @@ async function main() {
   const args = process.argv.slice(2);
 
   // Determine mode
-  if (args[0] === "init") {
+  if (args[0] === "--help" || args[0] === "-h") {
+    console.log("Runora");
+    console.log("");
+    console.log("Usage:");
+    console.log("  npx runora init                                                  # Initialize workspace");
+    console.log(
+      "  npx runora test [name] [--planner webllm|deterministic]          # Run test(s)"
+    );
+    console.log("  npx runora ui [port]                                             # Start UI server");
+    console.log(
+      "  npx runora run --url http://localhost:3000 \"task\"               # One-shot mode"
+    );
+    process.exit(0);
+  } else if (args[0] === "init") {
     // Workspace init mode
     await initWorkspace(process.cwd());
     process.exit(0);

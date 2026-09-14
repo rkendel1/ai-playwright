@@ -74,7 +74,7 @@ CLI argument: --url http://127.0.0.1:3000 "test checkout"
 
 Command works against a real application:
 ```bash
-npx ai-playwright --url http://127.0.0.1:3000 "test checkout"
+npx runora --url http://127.0.0.1:3000 "test checkout"
 ```
 
 Produces:

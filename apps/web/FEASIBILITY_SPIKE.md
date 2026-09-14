@@ -1,8 +1,8 @@
-# Browser-Local AI Playwright Feasibility Spike (PR #6)
+# Browser-Local Runora Feasibility Spike (PR #6)
 
 ## Objective
 
-Determine whether AI Playwright can run **entirely in a browser without a server** with honest, evidence-based reporting of capabilities and blockers.
+Determine whether Runora can run **entirely in a browser without a server** with honest, evidence-based reporting of capabilities and blockers.
 
 **Critical principle:** BROWSER_LOCAL_BLOCKED is a valid and valuable outcome. The goal is evidence, not forcing it to work.
 

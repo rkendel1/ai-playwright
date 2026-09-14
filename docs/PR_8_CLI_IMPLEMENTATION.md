@@ -5,12 +5,12 @@
 Implement the CLI vertical slice that proves browser-based automation works end-to-end for the developer:
 
 ```bash
-$ npx ai-playwright --url http://127.0.0.1:3000 "test checkout"
+$ npx runora --url http://127.0.0.1:3000 "test checkout"
 ```
 
 Expected experience:
 ```
-AI Playwright
+Runora
 Target:  http://127.0.0.1:3000
 Task:    test checkout
 Browser: Obscura
@@ -22,7 +22,7 @@ Browser: Obscura
 ✓ Assert
 
 PASS (4.2s)
-Evidence: .ai-playwright-results/task-abc123.json
+Evidence: .runora-results/task-abc123.json
 ```
 
 **Acceptance criterion:** Developer runs CLI against local app and gets deterministic PASS/FAIL + inspectable evidence, without needing to know Playwright, CDP, or Obscura exist.
@@ -54,13 +54,13 @@ Evidence: .ai-playwright-results/task-abc123.json
 - `packages/cli/evidence-reporter.ts`
 - Accepts `TaskResult` from kernel
 - Output to console (human-readable summary)
-- Write JSON to `.ai-playwright-results/<timestamp>.json`
+- Write JSON to `.runora-results/<timestamp>.json`
 - Exit code: 0 (passed), 1 (failed/blocked)
 
 ### 4. Package Metadata
 - Update `package.json` CLI binary entry: `"aipw": "packages/cli/index.ts"`
 - Create `packages/cli/package.json` if separate workspaces
-- Document: `npx ai-playwright --help`
+- Document: `npx runora --help`
 
 ### 5. Integration Tests (Minimal)
 - Test with mock Planner + real Playwright
@@ -133,7 +133,7 @@ Evidence: .ai-playwright-results/task-abc123.json
 - Adapters own environment-specific logic
 
 **CLI Scenario:**
-- Primary: `npx ai-playwright --url http://localhost:3000 "test checkout"`
+- Primary: `npx runora --url http://localhost:3000 "test checkout"`
 - No more, no less for MVP
 
 ### If Implementation Hits a Gap
@@ -157,7 +157,7 @@ Evidence: .ai-playwright-results/task-abc123.json
 - [ ] `packages/cli/index.ts` executable end-to-end
 - [ ] `packages/cli/adapters/remote-planner.ts` wraps external LLM
 - [ ] `packages/cli/evidence-reporter.ts` formats output
-- [ ] `npx ai-playwright --help` works
+- [ ] `npx runora --help` works
 - [ ] Exit codes correct (0 = passed, 1 = failed/blocked)
 
 ### Testing
@@ -168,8 +168,8 @@ Evidence: .ai-playwright-results/task-abc123.json
 
 ### Documentation
 - [ ] README in `packages/cli/` with quick start (5 min)
-- [ ] Usage: `npx ai-playwright --url <app> "<task>"`
-- [ ] Example: `npx ai-playwright --url http://localhost:3000 "test checkout"`
+- [ ] Usage: `npx runora --url <app> "<task>"`
+- [ ] Example: `npx runora --url http://localhost:3000 "test checkout"`
 
 ### Developer Experience
 - [ ] Can clone, npm install, run without Playwright knowledge
@@ -184,7 +184,7 @@ Evidence: .ai-playwright-results/task-abc123.json
 The PR is done only when this works with a real application:
 
 ```bash
-npx ai-playwright --url http://127.0.0.1:3000 "test checkout"
+npx runora --url http://127.0.0.1:3000 "test checkout"
 ```
 
 **Must demonstrate:**
@@ -236,9 +236,9 @@ docs/
 ## What Success Looks Like
 
 ```
-$ npx ai-playwright --url http://127.0.0.1:3000 "test checkout"
+$ npx runora --url http://127.0.0.1:3000 "test checkout"
 
-AI Playwright
+Runora
 Target:  http://127.0.0.1:3000
 Task:    test checkout
 Browser: Obscura
@@ -256,9 +256,9 @@ Browser: Obscura
 
 PASSED (3.2s)
 
-Evidence: .ai-playwright-results/2026-09-13T15-45-30-123Z.json
+Evidence: .runora-results/2026-09-13T15-45-30-123Z.json
 
-$ cat .ai-playwright-results/2026-09-13T15-45-30-123Z.json | jq .status
+$ cat .runora-results/2026-09-13T15-45-30-123Z.json | jq .status
 "passed"
 ```
 

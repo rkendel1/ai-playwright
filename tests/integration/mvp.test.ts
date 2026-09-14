@@ -36,7 +36,7 @@ async function runTaskWithDemo(options?: {
   }
 }
 
-describe("AI Playwright MVP", () => {
+describe("Runora MVP", () => {
   it("passes the canonical create project task", async () => {
     const result = await runTaskWithDemo();
 

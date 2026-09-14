@@ -50,6 +50,20 @@ describe("Runora package identity", () => {
   });
 });
 
+describe("Runora CLI help", () => {
+  it("prints Runora commands", () => {
+    const result = spawnSync("npx", ["tsx", path.resolve("packages/cli/index.ts"), "--help"], {
+      encoding: "utf-8",
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Runora");
+    expect(result.stdout).toContain("npx runora init");
+    expect(result.stdout).toContain("npx runora test");
+    expect(result.stdout).toContain("npx runora ui");
+  });
+});
+
 describe("create-runora", () => {
   it("generates an independent Runora project template", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "create-runora-"));

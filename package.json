@@ -9,8 +9,12 @@
     "test": "vitest run",
     "dev": "tsx packages/cli/index.ts",
     "web:dev": "vite",
-    "web:build": "vite build"
+    "web:build": "vite build",
+    "prepack": "npm run build"
   },
+  "workspaces": [
+    "packages/create-runora"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rkendel1/ai-playwright.git"

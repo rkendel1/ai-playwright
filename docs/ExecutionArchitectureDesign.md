@@ -2,10 +2,10 @@
 
 ## Overview
 
-This document captures the architectural decisions and designs required to deliver `npx ai-playwright` as a developer-friendly CLI tool that runs browser-based test automation.
+This document captures the architectural decisions and designs required to deliver `npx runora` as a developer-friendly CLI tool that runs browser-based test automation.
 
 The architecture must support:
-1. **Developer CLI** (primary): Simple `npx ai-playwright --url <app> --task <goal>` interface
+1. **Developer CLI** (primary): Simple `npx runora --url <app> --task <goal>` interface
 2. **Browser-local web app** (secondary): Self-hosted browser testing (PR #6 proved feasibility)
 3. **Unified kernel**: Same aipw-core, same message contracts, different adapters per mode
 
@@ -25,7 +25,7 @@ import { RemotePlannerAdapter } from "./adapters/remote-planner";
 import { PlaywrightBrowserAdapter } from "./adapters/playwright-browser";
 
 async function main(args: string[]) {
-  // Parse: npx ai-playwright --url http://localhost:3000 "test checkout"
+  // Parse: npx runora --url http://localhost:3000 "test checkout"
   const { url, task, model = "gpt-4o-mini" } = parseArgs(args);
 
   // Launch isolated browser instance
@@ -391,7 +391,7 @@ Suitable for GitHub Actions, GitLab CI, or other test reporters:
 ### CLI Output Format
 
 ```bash
-$ npx ai-playwright --url http://localhost:3000 "test checkout"
+$ npx runora --url http://localhost:3000 "test checkout"
 
 🔍 Connecting to http://localhost:3000...
 ✓ Page loaded (title: Online Store)
@@ -461,7 +461,7 @@ Summary: 7 actions, 2 assertions, all passed
 **Question:** Can CLI hide Playwright/Obscura complexity?
 
 **Evidence:**
-- ✓ CLI entry point is simple: `npx ai-playwright --url <app> --task <goal>`
+- ✓ CLI entry point is simple: `npx runora --url <app> --task <goal>`
 - ✓ Browser lifecycle (launch/shutdown) is CLI's responsibility, not kernel's
 - ✓ Playwright exceptions wrapped as user-friendly messages
 - ✓ Model selection is optional (sensible default)
@@ -470,11 +470,11 @@ Summary: 7 actions, 2 assertions, all passed
 **Design:**
 ```bash
 # Works out of the box (with sensible defaults)
-npx ai-playwright "test checkout"  # Uses http://localhost:3000 as default
-npx ai-playwright --url http://localhost:3000 "test checkout"
+npx runora "test checkout"  # Uses http://localhost:3000 as default
+npx runora --url http://localhost:3000 "test checkout"
 
 # Optional: customize
-npx ai-playwright --url http://localhost:3000 --task "test checkout" --model gpt-4
+npx runora --url http://localhost:3000 --task "test checkout" --model gpt-4
 
 # Never expose:
 # ❌ Playwright API
@@ -587,7 +587,7 @@ This validates the architecture: **"same kernel, different adapters"** is achiev
 Original architecture was correct; contract audit refines the implementation story:
 
 ```
-                 AI Playwright
+                 Runora
                       │
                 ┌─────▼─────┐
                 │ aipw-core │
