@@ -349,6 +349,131 @@
       gap: 12px;
       margin-top: 20px;
     }
+    .detail-toggle {
+      margin-top: 12px;
+      border-top: 1px solid #dce6f5;
+      padding-top: 12px;
+    }
+    .detail-toggle summary {
+      cursor: pointer;
+      color: #2347b1;
+      font-size: 13px;
+      font-weight: 700;
+      list-style: none;
+    }
+    .detail-toggle summary::-webkit-details-marker {
+      display: none;
+    }
+    .detail-toggle summary::after {
+      content: "↓";
+      margin-left: 8px;
+      color: #5d7694;
+    }
+    .detail-toggle[open] summary::after {
+      content: "↑";
+    }
+    .detail-list,
+    .evidence-links,
+    .suggestion-list,
+    .observation-elements {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .detail-list,
+    .observation-elements {
+      padding-left: 18px;
+    }
+    .observation-elements li,
+    .detail-list li {
+      color: #49617f;
+      line-height: 1.45;
+    }
+    .observation-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #eef4ff;
+      color: #2347b1;
+      font-size: 12px;
+      font-weight: 700;
+      flex-wrap: wrap;
+    }
+    .evidence-preview {
+      position: relative;
+      margin-top: 14px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid #dce6f5;
+      background: #ffffff;
+    }
+    .evidence-preview img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .evidence-highlight {
+      position: absolute;
+      border: 3px solid rgba(197, 48, 48, 0.95);
+      box-shadow: 0 0 0 9999px rgba(197, 48, 48, 0.12);
+      border-radius: 12px;
+      pointer-events: none;
+    }
+    .evidence-actions,
+    .suggestion-list {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    .inline-link {
+      color: #2347b1;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .inline-link:hover {
+      text-decoration: underline;
+    }
+    .suggestion-card {
+      background: #fff7f7;
+      border-color: #f1c0c0;
+    }
+    .status-toast {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      max-width: min(420px, calc(100vw - 48px));
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid #dce6f5;
+      background: #ffffff;
+      box-shadow: 0 16px 32px rgba(16, 35, 63, 0.16);
+      color: #10233f;
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      z-index: 1100;
+    }
+    .status-toast.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .suggestion-button {
+      background: #ffffff;
+      border: 1px solid #d9e3f3;
+      border-radius: 999px;
+      color: #10233f;
+      padding: 10px 14px;
+      font-weight: 600;
+    }
+    .kicker {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #5d7694;
+    }
     .running-step {
       display: flex;
       justify-content: space-between;
@@ -444,6 +569,10 @@
       .tests-panel { position: static; }
       .timeline-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .info-grid, .summary-grid, .step-detail-grid { grid-template-columns: 1fr; }
+      .evidence-actions,
+      .suggestion-list {
+        flex-direction: column;
+      }
     }
   </style>
 </head>
@@ -479,7 +608,10 @@
         </div>
         <div class="section">
           <div class="section-header">
-            <h3 class="section-title">Suite Runs</h3>
+            <div>
+              <h3 class="section-title">Suite Runs</h3>
+              <p id="suite-runs-summary" class="panel-subtitle">Historical suite evidence appears here.</p>
+            </div>
           </div>
           <div id="suite-runs-list" class="suite-runs-list"></div>
         </div>
@@ -521,6 +653,11 @@
     </div>
   </div>
 
+  <div id="feedback-region" class="status-toast" role="status" aria-live="polite" aria-atomic="true">
+    <strong id="feedback-title"></strong>
+    <div id="feedback-detail" class="small-text mono" style="margin-top: 8px; display: none;"></div>
+  </div>
+
   <script>
     const state = {
       tests: [],
@@ -535,6 +672,7 @@
       runningSuite: null,
       editTestId: null,
     };
+    let feedbackTimer = null;
 
     function escapeHtml(value) {
       return String(value ?? '')
@@ -662,7 +800,8 @@
 
     function errorSummary(run, step) {
       const element = observationElement(step);
-      const rawError = step?.result?.error || run?.failure?.message || 'Unknown error';
+      const rawError = step?.result?.error || run?.failure?.message;
+      if (!rawError) return 'None';
       if (rawError.includes('intercepts pointer events') && element?.name) {
         return 'Element "' + element.name + '" was blocked by another page element';
       }
@@ -670,6 +809,218 @@
         return 'Element "' + element.name + '" was not found';
       }
       return rawError;
+    }
+
+    function interactiveElements(observation) {
+      const elements = Array.isArray(observation?.elements) ? observation.elements : [];
+      return elements.filter((element) => ['button', 'link', 'textbox', 'combobox', 'checkbox', 'radio'].includes(element.role));
+    }
+
+    function observationSummary(step) {
+      const observation = step?.observation;
+      const interactive = interactiveElements(observation);
+      if (!interactive.length) return 'No interactive elements captured';
+      return interactive.length + ' interactive element' + (interactive.length === 1 ? '' : 's');
+    }
+
+    function evidenceFiles(run) {
+      return run?.evidenceFiles || { directory: run?.evidence || null, screenshots: [], trace: null };
+    }
+
+    function primaryScreenshot(run) {
+      const screenshots = evidenceFiles(run).screenshots || [];
+      return screenshots.find((entry) => entry.name.includes('failure')) || screenshots[screenshots.length - 1] || null;
+    }
+
+    function highlightStyle(step) {
+      const element = observationElement(step);
+      const bounds = element?.bounds;
+      const viewport = step?.observation?.viewport;
+      if (!bounds || !viewport?.pageWidth || !viewport?.pageHeight) return '';
+      const left = ((bounds.x + viewport.scrollX) / viewport.pageWidth) * 100;
+      const top = ((bounds.y + viewport.scrollY) / viewport.pageHeight) * 100;
+      const width = (bounds.width / viewport.pageWidth) * 100;
+      const height = (bounds.height / viewport.pageHeight) * 100;
+      return `left:${left}%;top:${top}%;width:${width}%;height:${height}%;`;
+    }
+
+    function renderObservationCard(step) {
+      const observation = step?.observation || {};
+      const interactive = interactiveElements(observation);
+      return `
+        <div class="step-detail-card wide">
+          <span class="summary-label">Observation</span>
+          <div class="summary-value">${escapeHtml(observation.title || 'Untitled page')}</div>
+          <div class="small-text">${escapeHtml(observation.url || 'No URL captured')}</div>
+          <div class="kicker">
+            <span class="observation-chip">${escapeHtml(observationSummary(step))}</span>
+          </div>
+          <details id="step-observation-details" class="detail-toggle">
+            <summary><span class="toggle-label" data-open-label="Hide details (expanded)" data-closed-label="View details (collapsed)">View details (collapsed)</span></summary>
+            <ul class="detail-list">
+              <li><strong>Page URL:</strong> ${escapeHtml(observation.url || 'No URL captured')}</li>
+              <li><strong>Accessibility summary:</strong> ${interactive.length ? interactive.length + ' interactive elements visible' : 'No interactive elements were captured in this observation'}</li>
+            </ul>
+            ${interactive.length ? `
+              <ul class="observation-elements">
+                ${interactive.slice(0, 8).map((element) => `<li>${escapeHtml(element.role || 'element')} · ${escapeHtml(element.name || element.id || 'Unnamed element')}</li>`).join('')}
+              </ul>
+            ` : ''}
+          </details>
+        </div>
+      `;
+    }
+
+    function renderVisualEvidence(run, step) {
+      const failedStep = step?.result?.status === 'failure' || step?.validation?.status === 'failure' || run?.status !== 'passed';
+      if (!failedStep) return '';
+      const manifest = evidenceFiles(run);
+      const screenshot = primaryScreenshot(run);
+      const trace = manifest.trace;
+      const highlight = highlightStyle(step);
+      if (!screenshot) {
+        return `
+          <div class="step-detail-card wide">
+            <span class="summary-label">Visual evidence</span>
+            <div class="summary-value">No screenshot captured</div>
+            <div class="small-text">A screenshot was not available for this failure. The trace and evidence directory may still help explain what happened.</div>
+            <div class="kicker mono">${escapeHtml(manifest.directory || run?.evidence || '(no evidence path recorded)')}</div>
+            <div class="evidence-actions">
+              ${trace ? `<a class="secondary-button inline-link" href="${trace.url}" target="_blank" rel="noopener noreferrer">View trace</a>` : ''}
+            </div>
+          </div>
+        `;
+      }
+      return `
+        <div class="step-detail-card wide">
+          <span class="summary-label">Visual evidence</span>
+          <div class="summary-value">${escapeHtml(screenshot.name)}</div>
+          <div class="small-text">Captured at the moment this run failed.</div>
+          <div class="evidence-preview">
+            <img src="${screenshot.url}" alt="Failure evidence for ${escapeHtml(run.testName || 'run')}" />
+            ${highlight ? `<div class="evidence-highlight" style="${highlight}"></div>` : ''}
+          </div>
+          <details class="detail-toggle">
+            <summary><span class="toggle-label" data-open-label="Hide full evidence (expanded)" data-closed-label="View full evidence (collapsed)">View full evidence (collapsed)</span></summary>
+            <div class="evidence-links">
+              <div class="small-text mono">${escapeHtml(manifest.directory || run?.evidence || '(no evidence path recorded)')}</div>
+              ${manifest.screenshots.map((entry) => `<a class="inline-link" href="${entry.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(entry.name)}</a>`).join('')}
+              ${trace ? `<a class="inline-link" href="${trace.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(trace.name)}</a>` : ''}
+            </div>
+          </details>
+          <div class="evidence-actions">
+            <a class="secondary-button inline-link" href="${screenshot.url}" target="_blank" rel="noopener noreferrer">Open screenshot</a>
+            <a class="secondary-button inline-link" href="${screenshot.url}" download="${escapeHtml(screenshot.name)}">Download screenshot</a>
+          </div>
+        </div>
+      `;
+    }
+
+    function showFeedback(message, detail) {
+      const region = document.getElementById('feedback-region');
+      const title = document.getElementById('feedback-title');
+      const detailNode = document.getElementById('feedback-detail');
+      if (!region || !title || !detailNode) return;
+      title.textContent = message;
+      detailNode.textContent = detail || '';
+      detailNode.style.display = detail ? 'block' : 'none';
+      region.classList.add('visible');
+      if (feedbackTimer) clearTimeout(feedbackTimer);
+      feedbackTimer = setTimeout(() => {
+        region.classList.remove('visible');
+      }, 4000);
+    }
+
+    function syncDisclosureLabels(root) {
+      const scope = root || document;
+      scope.querySelectorAll('.detail-toggle').forEach((details) => {
+        const label = details.querySelector('.toggle-label');
+        if (!label) return;
+        const text = details.open ? label.dataset.openLabel : label.dataset.closedLabel;
+        if (text) {
+          label.textContent = text;
+        }
+      });
+    }
+
+    async function copySuggestion(text) {
+      const decoded = decodeURIComponent(text);
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+        await navigator.clipboard.writeText(decoded);
+        showFeedback('Suggestion copied to clipboard.');
+      } catch {
+        showFeedback('Copy this suggestion manually:', decoded);
+      }
+    }
+
+    function expandStepObservation() {
+      const details = document.getElementById('step-observation-details');
+      if (!details) return;
+      details.open = true;
+      details.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function renderSuggestions(run, step) {
+      if (run?.status !== 'failed') return '';
+      const suggestions = [];
+      const rawError = step?.result?.error || run?.failure?.message || '';
+      const errorType = run?.failure?.execution?.errorType
+        || (rawError.includes('intercepts pointer events') ? 'target_blocked' : '')
+        || (rawError.includes('not found') ? 'target_not_found' : '')
+        || (rawError.includes('timeout') ? 'timeout' : '');
+      const trace = evidenceFiles(run).trace;
+      if (errorType === 'target_blocked') {
+        suggestions.push({ label: 'Inspect overlapping element', action: 'expand' });
+        suggestions.push({ label: 'Retry with force: true', action: 'copy', value: 'Consider retrying this Playwright click with force: true after verifying the overlap is safe.' });
+        suggestions.push({ label: 'Add explicit wait for actionability', action: 'copy', value: 'Add an explicit wait for the target element to become visible, enabled, and actionable before clicking.' });
+      } else {
+        suggestions.push({ label: 'Re-run with visual debugging', action: 'rerun' });
+        suggestions.push({ label: 'Promote this step to stable Playwright code', action: 'copy', value: 'Translate this failing step into stable Playwright code with explicit locators, waits, and assertions.' });
+        if (trace) {
+          suggestions.push({ label: 'View full trace', action: 'trace', value: trace.url });
+        }
+      }
+      return `
+        <div class="section">
+          <div class="section-header"><h3 class="section-title">Suggested Next Steps</h3></div>
+          <div class="step-detail-card wide suggestion-card">
+            <div class="small-text">Context-aware follow-up actions based on the current failure.</div>
+            <div class="suggestion-list">
+              ${suggestions.map((item) => {
+                if (item.action === 'rerun') return '<button class="suggestion-button" type="button" onclick="runTest()">' + escapeHtml(item.label) + '</button>';
+                if (item.action === 'expand') return '<button class="suggestion-button" type="button" onclick="expandStepObservation()">' + escapeHtml(item.label) + '</button>';
+                if (item.action === 'trace') return '<a class="suggestion-button inline-link" href="' + item.value + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(item.label) + '</a>';
+                return '<button class="suggestion-button" type="button" onclick="copySuggestion(\'' + encodeURIComponent(item.value) + '\')">' + escapeHtml(item.label) + '</button>';
+              }).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderEvidenceEntries(evidence) {
+      if (!evidence.length) {
+        return '<div class="empty-state"><h3>No evidence captured</h3><p>This run did not record assertion or budget evidence.</p></div>';
+      }
+      return evidence.map((item) => `
+        <div class="evidence-card">
+          <div class="status-row">
+            <div class="card-title">${escapeHtml(item.assertion || item.type)}</div>
+            <span class="status-pill ${statusClass(item.result)}">${statusLabel(item.result)}</span>
+          </div>
+          <div class="small-text">${escapeHtml(titleCase(item.type || 'evidence'))}</div>
+          <div class="small-text mono">${escapeHtml(item.detail || '')}</div>
+        </div>
+      `).join('');
+    }
+
+    function suiteRunsSummary() {
+      if (state.suiteRuns.length === 0) return 'Run the full suite to build durable history.';
+      const recent = state.suiteRuns.filter((run) => run.status !== 'running').slice(0, 5);
+      if (recent.length < 3) return recent.length + ' recent suite run' + (recent.length === 1 ? '' : 's');
+      const failed = recent.filter((run) => run.status === 'failed').length;
+      return 'Failed ' + failed + ' of last ' + recent.length + ' runs';
     }
 
     function renderTests() {
@@ -706,8 +1057,20 @@
 
     function renderSuiteRuns() {
       const list = document.getElementById('suite-runs-list');
+      const summary = document.getElementById('suite-runs-summary');
+      if (summary) {
+        summary.textContent = suiteRunsSummary();
+      }
       if (state.suiteRuns.length === 0) {
-        list.innerHTML = '<div class="empty-state"><h3>No suite runs yet</h3><p>Run the full suite to persist historical evidence.</p></div>';
+        list.innerHTML = `
+          <div class="empty-state">
+            <h3>No suite runs yet</h3>
+            <p>Run the full suite to collect durable evidence, compare outcomes, and track flakiness over time.</p>
+            <div style="margin-top: 16px;">
+              <button class="primary-button" type="button" onclick="runSuite()" ${state.tests.length === 0 || state.isRunning ? 'disabled' : ''}>Run Full Suite</button>
+            </div>
+          </div>
+        `;
         return;
       }
 
@@ -1015,6 +1378,7 @@
       }
       const step = steps[state.selectedStepIndex] || null;
       const evidence = Array.isArray(run.result?.evidence) ? run.result.evidence : [];
+      const visualEvidence = step ? renderVisualEvidence(run, step) : '';
 
       document.getElementById('result-content').innerHTML = `
         <div class="split-header">
@@ -1061,11 +1425,7 @@
           <div class="section">
             <div class="section-header"><h3 class="section-title">Step Evidence</h3></div>
             <div class="step-detail-grid">
-              <div class="step-detail-card wide">
-                <span class="summary-label">Observation</span>
-                <div class="summary-value">${escapeHtml(step.observation?.url || 'No URL captured')}</div>
-                <div class="small-text">${step.observation?.elements?.length ?? 0} visible elements · ${escapeHtml(step.observation?.title || 'Untitled page')}</div>
-              </div>
+              ${renderObservationCard(step)}
               <div class="arrow">↓</div>
               <div class="step-detail-card wide">
                 <span class="summary-label">Action</span>
@@ -1088,22 +1448,17 @@
                 <span class="summary-label">Error</span>
                 <div class="summary-value mono">${escapeHtml(errorSummary(run, step))}</div>
               </div>
+              ${visualEvidence ? '<div class="arrow">↓</div>' + visualEvidence : ''}
             </div>
           </div>
         ` : ''}
 
+        ${renderSuggestions(run, step)}
+
         <div class="section">
           <div class="section-header"><h3 class="section-title">Evidence</h3></div>
           <div class="suite-tests">
-            ${evidence.length ? evidence.map((item) => `
-              <div class="evidence-card">
-                <div class="status-row">
-                  <div class="card-title">${escapeHtml(item.assertion || item.type)}</div>
-                  <span class="status-pill ${statusClass(item.result)}">${statusLabel(item.result)}</span>
-                </div>
-                <div class="small-text mono">${escapeHtml(item.detail || '')}</div>
-              </div>
-            `).join('') : '<div class="empty-state"><h3>No evidence entries</h3></div>'}
+            ${renderEvidenceEntries(evidence)}
           </div>
         </div>
       `;
@@ -1137,6 +1492,7 @@
       renderTests();
       renderSuiteRuns();
       renderResult();
+      syncDisclosureLabels();
     }
 
     async function loadTests() {
@@ -1360,6 +1716,12 @@
         closeNewTestForm();
       }
     });
+
+    document.addEventListener('toggle', (event) => {
+      if (event.target instanceof HTMLDetailsElement && event.target.classList.contains('detail-toggle')) {
+        syncDisclosureLabels(event.target.parentElement || document);
+      }
+    }, true);
 
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {

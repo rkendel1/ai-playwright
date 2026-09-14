@@ -13,6 +13,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const screenshotDir = path.join(repoRoot, "docs/images/cx");
 const updateScreenshots = process.env.AIPW_UPDATE_CX_SCREENSHOTS === "1";
 const runCXWorkspace = process.env.AIPW_RUN_CX_WORKSPACE === "1" || updateScreenshots;
+const cxWorkspaceTimeoutMs = updateScreenshots ? 300000 : 180000;
 const cxWorkspaceTest = runCXWorkspace ? it : it.skip;
 const cliEntry = path.join(repoRoot, "packages/cli/index.ts");
 const tempRoots: string[] = [];
@@ -149,6 +150,7 @@ describe("CX workspace acceptance", () => {
     await page.getByLabel("Task").fill("Verify the home page smoke check");
     await page.getByRole("button", { name: "Create" }).click();
     await testCard(page, "Home").waitFor();
+    await maybeScreenshot(page, "03-test-workspace.png");
 
     await testCard(page, "Checkout").click();
     await page.getByRole("button", { name: "Run Test" }).click();
@@ -164,9 +166,9 @@ describe("CX workspace acceptance", () => {
     await maybeScreenshot(page, "06-failure.png");
     await page.getByRole("button", { name: /Step 4/ }).click();
     await page.getByText("Step Evidence").waitFor();
+    await page.getByText("View details (collapsed)").click();
+    await page.getByText("View full evidence (collapsed)").click();
     await maybeScreenshot(page, "07-failure-evidence.png");
-
-    await maybeScreenshot(page, "03-test-workspace.png");
 
     await testCard(page, "Home").click();
     await page.getByRole("button", { name: "Run Test" }).click();
@@ -184,14 +186,18 @@ describe("CX workspace acceptance", () => {
     await maybeScreenshot(page, "08-suite-running.png");
     await detailStatus(page, "FAIL").waitFor({ timeout: 50000 });
     await maybeScreenshot(page, "09-suite-result.png");
-    if (updateScreenshots) {
-      await page.waitForTimeout(500);
-      await maybeScreenshot(page, "10-suite-history.png");
-    }
 
     await closeServer(uiServer);
     uiServer = await startUIServer(workspaceDir, updateScreenshots ? 3001 : 0);
     const suiteRuns = await loadSuiteRunsWithRetry(serverBaseUrl(uiServer));
     expect(suiteRuns.length).toBeGreaterThanOrEqual(2);
-  }, 180000);
+    await page.goto(serverBaseUrl(uiServer));
+    await page.getByText("Failed 1 of last 2 runs").waitFor();
+    await page.locator(".suite-run-card").first().click();
+    await page.getByText("Suite Result").waitFor();
+    if (updateScreenshots) {
+      await page.waitForTimeout(500);
+      await maybeScreenshot(page, "10-suite-history.png");
+    }
+  }, cxWorkspaceTimeoutMs);
 });

@@ -34,6 +34,12 @@ export type ElementObservation = {
   name?: string;
   value?: string;
   ariaLabel?: string;
+  bounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
   state: ElementState;
 };
 
@@ -43,6 +49,14 @@ export type Observation = {
   url: string;
   title: string;
   text?: string;
+  viewport?: {
+    width: number;
+    height: number;
+    scrollX: number;
+    scrollY: number;
+    pageWidth: number;
+    pageHeight: number;
+  };
   elements: ElementObservation[];
 };
 
