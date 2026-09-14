@@ -120,8 +120,12 @@ export async function startCXApp(options: CXAppOptions = {}) {
     </form>
     <div id="submit-blocker" hidden aria-hidden="true"></div>
     <script>
+      let blockerTimer;
       document.getElementById('email')?.addEventListener('input', () => {
-        document.getElementById('submit-blocker')?.removeAttribute('hidden');
+        window.clearTimeout(blockerTimer);
+        blockerTimer = window.setTimeout(() => {
+          document.getElementById('submit-blocker')?.removeAttribute('hidden');
+        }, 50);
       });
     </script>
   </body>

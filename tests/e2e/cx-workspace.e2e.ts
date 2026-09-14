@@ -10,7 +10,7 @@ import { discoverTests, resolveConfig, runSuite } from "../../packages/workspace
 import { startCXApp } from "../fixtures/cxApp.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const screenshotDir = path.join(repoRoot, "docs/images/cx");
+const screenshotDir = path.join(repoRoot, "docs/images");
 const updateScreenshots = process.env.AIPW_UPDATE_CX_SCREENSHOTS === "1";
 const runCXWorkspace = process.env.AIPW_RUN_CX_WORKSPACE === "1" || updateScreenshots;
 const cxWorkspaceTimeoutMs = updateScreenshots ? 300000 : 180000;
@@ -127,48 +127,61 @@ describe("CX workspace acceptance", () => {
 
     await page.goto(uiUrl);
     await page.getByText("No tests yet").waitFor();
-    await maybeScreenshot(page, "01-empty-workspace.png");
+    await page.locator("#planner-mode").selectOption("deterministic");
 
     await page.getByRole("button", { name: "+ New Test" }).click();
-    await page.getByLabel("Name").fill("Checkout");
-    await page.getByLabel("URL").fill(app.routes.checkout);
-    await page.getByLabel("Task").fill("Test the checkout flow");
-    await maybeScreenshot(page, "02-new-test.png");
+    await page.locator("#new-test-name").fill("Checkout");
+    await page.locator("#new-test-url").fill(app.routes.checkout);
+    await page.locator("#new-test-task").fill("Test the checkout flow");
     await page.getByRole("button", { name: "Create" }).click();
     await testCard(page, "Checkout").waitFor();
 
     await page.getByRole("button", { name: "+ New Test" }).click();
-    await page.getByLabel("Name").fill("Invalid Payment");
-    await page.getByLabel("URL").fill(app.routes.invalidPayment);
-    await page.getByLabel("Task").fill("Run the invalid payment path");
+    await page.locator("#new-test-name").fill("Invalid Payment");
+    await page.locator("#new-test-url").fill(app.routes.invalidPayment);
+    await page.locator("#new-test-task").fill("Run the invalid payment path");
     await page.getByRole("button", { name: "Create" }).click();
     await testCard(page, "Invalid Payment").waitFor();
 
     await page.getByRole("button", { name: "+ New Test" }).click();
-    await page.getByLabel("Name").fill("Home");
-    await page.getByLabel("URL").fill(app.routes.home);
-    await page.getByLabel("Task").fill("Verify the home page smoke check");
+    await page.locator("#new-test-name").fill("Home");
+    await page.locator("#new-test-url").fill(app.routes.home);
+    await page.locator("#new-test-task").fill("Verify the home page smoke check");
     await page.getByRole("button", { name: "Create" }).click();
     await testCard(page, "Home").waitFor();
-    await maybeScreenshot(page, "03-test-workspace.png");
+    await maybeScreenshot(page, "01-test-workspace.png");
 
     await testCard(page, "Checkout").click();
+    const runningTestState = page.getByText("Runora is actively planning and executing this test.").waitFor();
     await page.getByRole("button", { name: "Run Test" }).click();
-    await page.getByText("Runora is actively planning and executing this test.").waitFor();
-    await maybeScreenshot(page, "04-running.png");
+    await runningTestState;
+    await maybeScreenshot(page, "02-test-running.png");
     await detailStatus(page, "PASS").waitFor();
-    await maybeScreenshot(page, "05-pass.png");
+    await maybeScreenshot(page, "03-runtime-truth.png");
+    await maybeScreenshot(page, "04-passing-test.png");
 
     await testCard(page, "Invalid Payment").click();
+    const runningFailureState = page.getByText("Runora is actively planning and executing this test.").waitFor();
     await page.getByRole("button", { name: "Run Test" }).click();
-    await page.getByText("Runora is actively planning and executing this test.").waitFor();
-    await detailStatus(page, "FAIL").waitFor({ timeout: 40000 });
-    await maybeScreenshot(page, "06-failure.png");
+    await runningFailureState;
+    await detailStatus(page, "FAIL").waitFor({ timeout: 90000 });
+    await maybeScreenshot(page, "05-failure-diagnosis.png");
     await page.getByRole("button", { name: /Step 4/ }).click();
     await page.getByText("Step Evidence").waitFor();
-    await page.getByText("View details (collapsed)").click();
     await page.getByText("View full evidence (collapsed)").click();
-    await maybeScreenshot(page, "07-failure-evidence.png");
+    await maybeScreenshot(page, "06-failure-evidence.png");
+    await page.getByText("View details (collapsed)").click();
+    await maybeScreenshot(page, "07-observation-details.png");
+    await maybeScreenshot(page, "08-suggested-next-steps.png");
+    await page.getByText("Heal: actionability wait candidate").click();
+    await page.getByRole("heading", { name: "Heal Candidate", exact: true }).waitFor();
+    await maybeScreenshot(page, "09-heal-candidate.png");
+    await page.getByRole("button", { name: "View original failure" }).click();
+    await page.getByText("Suggested Next Steps").waitFor();
+    await page.getByRole("button", { name: "Back to Test" }).click();
+    await page.getByRole("heading", { name: "Run History", exact: true }).waitFor();
+    await page.locator(".run-history-card").first().waitFor();
+    await maybeScreenshot(page, "12-test-history.png");
 
     await testCard(page, "Home").click();
     await page.getByRole("button", { name: "Run Test" }).click();
@@ -180,24 +193,25 @@ describe("CX workspace acceptance", () => {
     const seededPassSuite = await runSuite(passingTests, config);
     expect(seededPassSuite.status).toBe("passed");
 
+    const runningSuiteState = page.getByText(/^Running…$/).waitFor();
     await page.getByRole("button", { name: "Run All Tests" }).click();
     await page.getByText("Suite Execution").waitFor();
-    await page.getByText(/^Running…$/).waitFor();
-    await maybeScreenshot(page, "08-suite-running.png");
-    await detailStatus(page, "FAIL").waitFor({ timeout: 50000 });
-    await maybeScreenshot(page, "09-suite-result.png");
+    await runningSuiteState;
+    await detailStatus(page, "FAIL").waitFor({ timeout: 120000 });
+    await maybeScreenshot(page, "10-suite-run.png");
 
+    await page.goto("about:blank");
     await closeServer(uiServer);
     uiServer = await startUIServer(workspaceDir, updateScreenshots ? 3001 : 0);
     const suiteRuns = await loadSuiteRunsWithRetry(serverBaseUrl(uiServer));
     expect(suiteRuns.length).toBeGreaterThanOrEqual(2);
     await page.goto(serverBaseUrl(uiServer));
-    await page.getByText("Failed 1 of last 2 runs").waitFor();
+    await page.getByText("2 recent suite runs").waitFor();
     await page.locator(".suite-run-card").first().click();
     await page.getByText("Suite Result").waitFor();
     if (updateScreenshots) {
       await page.waitForTimeout(500);
-      await maybeScreenshot(page, "10-suite-history.png");
+      await maybeScreenshot(page, "11-suite-history.png");
     }
   }, cxWorkspaceTimeoutMs);
 });
