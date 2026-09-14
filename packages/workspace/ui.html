@@ -776,21 +776,30 @@
         <div>
           <p class="eyebrow" style="margin-bottom: 6px;">Record Test</p>
           <h2 id="record-test-title" style="margin-bottom: 8px;">Record User Actions</h2>
-          <p class="muted">Perform your test actions in the browser. We'll capture everything and create a test from it.</p>
+          <p class="muted">Choose a browser and starting screen, then perform the journey in the visible browser window.</p>
         </div>
       </div>
 
       <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; flex: 1; overflow: hidden; margin-top: 16px;">
         <!-- Browser preview area -->
         <div style="display: flex; flex-direction: column; gap: 12px; min-height: 0;">
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <input id="record-test-url" type="url" placeholder="http://localhost:3000" style="flex: 1; border: 1px solid #c9d7ea; border-radius: 8px; padding: 8px 12px; background: #fbfdff;" />
+          <div style="display: grid; grid-template-columns: minmax(160px, .7fr) minmax(260px, 1.3fr) auto; gap: 8px; align-items: end;">
+            <label style="display:grid;gap:6px;font-size:12px;font-weight:700;color:#274160;">Browser
+              <select id="record-browser" style="border: 1px solid #c9d7ea; border-radius: 8px; padding: 8px 12px; background: #fbfdff;">
+                <option value="chromium">Runora Chromium (recommended)</option>
+                <option value="chrome">Google Chrome</option>
+                <option value="msedge">Microsoft Edge</option>
+              </select>
+            </label>
+            <label style="display:grid;gap:6px;font-size:12px;font-weight:700;color:#274160;">Starting screen URL
+              <input id="record-test-url" type="url" placeholder="http://localhost:3000" style="width:100%; border: 1px solid #c9d7ea; border-radius: 8px; padding: 8px 12px; background: #fbfdff;" />
+            </label>
             <button class="primary-button" type="button" onclick="startRecording()" id="start-recording-btn">Start Recording</button>
           </div>
           <div id="browser-preview" style="border: 2px solid #dce6f5; border-radius: 12px; background: #f5f8fc; flex: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; color: #5d7694;">
             <div style="text-align: center;">
-              <div style="font-size: 14px;">Browser will appear here</div>
-              <div style="font-size: 12px; color: #8b9ab9; margin-top: 8px;">Enter URL and click "Start Recording"</div>
+              <div style="font-size: 14px;">A visible browser window will open</div>
+              <div style="font-size: 12px; color: #8b9ab9; margin-top: 8px;">Runora records clicks, text entry, navigation, and scrolling until you stop.</div>
             </div>
           </div>
         </div>
@@ -2036,6 +2045,10 @@
     }
 
     function switchTestMode(mode) {
+      if (mode === 'record') {
+        switchToRecordMode();
+        return;
+      }
       currentTestMode = mode;
 
       // Update tab active states
@@ -2229,7 +2242,10 @@
       document.getElementById('record-test-modal').classList.remove('hidden');
     }
 
-    function closeRecordMode() {
+    async function closeRecordMode() {
+      if (recordingSession?.sessionId && recordingSession.isRecording) {
+        try { await fetch('/api/recording/' + recordingSession.sessionId + '/stop', { method: 'POST' }); } catch { /* server cleanup is best effort */ }
+      }
       document.getElementById('record-test-modal').classList.add('hidden');
       recordingSession = null;
     }
@@ -2238,6 +2254,7 @@
       if (!recordingSession) return;
 
       const url = document.getElementById('record-test-url').value.trim();
+      const browser = document.getElementById('record-browser').value;
       if (!url) {
         alert('Please enter a URL');
         return;
@@ -2257,7 +2274,7 @@
         const response = await fetch('/api/recording/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }),
+          body: JSON.stringify({ url, browser }),
         });
         const payload = await readResponseBody(response);
         if (!response.ok) {
@@ -2268,7 +2285,7 @@
           return;
         }
         recordingSession.sessionId = payload.sessionId;
-        document.getElementById('browser-preview').innerHTML = `<iframe src="${escapeHtml(payload.url)}" style="width: 100%; height: 100%; border: none; border-radius: 10px;"></iframe>`;
+        document.getElementById('browser-preview').innerHTML = `<div style="text-align:center;padding:24px;"><strong>Recording in ${escapeHtml(payload.browserLabel)}</strong><div style="font-size:12px;color:#5d7694;margin-top:8px;">Use the visible browser window that just opened. Return here and click Stop Recording when finished.</div></div>`;
 
         // Poll for actions
         pollRecordedActions();
@@ -2347,9 +2364,8 @@
           const payload = await readResponseBody(response);
 
           if (response.ok && payload.description) {
-            // Use AI-generated description from vision model
             document.getElementById('record-test-description').value = payload.description;
-            document.getElementById('recording-status').textContent = `✓ Recording stopped. ${payload.actionCount} actions captured. Description generated using vision analysis.`;
+            document.getElementById('recording-status').textContent = `✓ Recording stopped. ${payload.actionCount} actions captured. Replay steps are ready to save.`;
           } else {
             document.getElementById('recording-status').textContent = `✓ Recording stopped. ${recordingSession.actions.length} actions captured.`;
           }
@@ -2399,7 +2415,7 @@
         closeRecordMode();
         await refresh();
         setSelectedTest(payload.id);
-        showFeedback('Test saved from recording with AI-enhanced description');
+        showFeedback('Test saved from recorded browser actions');
       } catch (error) {
         alert('Error saving test: ' + error);
       }

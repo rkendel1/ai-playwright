@@ -177,6 +177,53 @@ describe("workspace UI", () => {
     await page!.getByText(/1 passed · 0 failed · 0 blocked|0 passed · 1 failed · 0 blocked/).first().waitFor();
   });
 
+  it("opens a recording setup that asks for the browser and starting screen", async () => {
+    uiServer = await startUIServer(workspaceDir, 0);
+    await page!.goto(serverBaseUrl(uiServer));
+
+    await page!.getByRole("button", { name: "+ New Test" }).click();
+    await page!.getByRole("button", { name: "Record", exact: true }).click();
+
+    const dialog = page!.getByRole("dialog", { name: "Record User Actions" });
+    await dialog.waitFor();
+    await dialog.getByLabel("Browser").selectOption("chromium");
+    await dialog.getByLabel("Starting screen URL").waitFor();
+    await dialog.getByRole("button", { name: "Start Recording" }).waitFor();
+  });
+
+  it("does not poll the planner queue while the workspace is idle", async () => {
+    uiServer = await startUIServer(workspaceDir, 0);
+    let plannerRequests = 0;
+    page!.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/planner/request") plannerRequests += 1;
+    });
+
+    await page!.goto(serverBaseUrl(uiServer));
+    await page!.waitForTimeout(750);
+
+    expect(plannerRequests).toBe(0);
+  });
+
+  it("launches, captures, and stops a managed-browser recording session", async () => {
+    uiServer = await startUIServer(workspaceDir, 0, { announce: false, recordingHeadless: true });
+    const baseUrl = serverBaseUrl(uiServer);
+
+    const startedResponse = await fetch(`${baseUrl}/api/recording/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ browser: "chromium", url: baseUrl }),
+    });
+    expect(startedResponse.status).toBe(200);
+    const started = await startedResponse.json() as { sessionId: string; browserLabel: string };
+    expect(started.browserLabel).toBe("Runora Chromium");
+
+    const stoppedResponse = await fetch(`${baseUrl}/api/recording/${started.sessionId}/stop`, { method: "POST" });
+    expect(stoppedResponse.status).toBe(200);
+    const stopped = await stoppedResponse.json() as { actionCount: number; description: string };
+    expect(stopped.actionCount).toBeGreaterThan(0);
+    expect(stopped.description).toContain("Navigate to");
+  });
+
   it("renders failure screenshots, observation details, and actionable suggestions", async () => {
     createTestFile(path.join(workspaceDir, "tests"), "Invalid Payment", "Verify invalid payment failure");
     await seedRunWithArtifacts({
@@ -392,8 +439,8 @@ describe("workspace UI", () => {
 
     await page!.getByRole("button", { name: "+ New Test" }).click({ timeout: 3000 });
     const testDialog = page!.getByRole("dialog", { name: "New Test" });
-    await testDialog.getByLabel("Name", { exact: true }).fill("Admin login", { timeout: 3000 });
-    await testDialog.getByLabel("Task").fill("Sign in and verify the dashboard", { timeout: 3000 });
+    await testDialog.locator("#new-test-name").fill("Admin login", { timeout: 3000 });
+    await testDialog.locator("#new-test-task").fill("Sign in and verify the dashboard", { timeout: 3000 });
     await testDialog.getByRole("checkbox", { name: /Staging admin/ }).check({ timeout: 3000 });
     await testDialog.getByRole("button", { name: "Create" }).click({ timeout: 3000 });
 

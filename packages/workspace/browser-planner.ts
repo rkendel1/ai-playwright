@@ -142,17 +142,23 @@ async function answer(request: { id: string; input: unknown }) {
   }
 }
 
-async function plannerLoop() {
-  for (;;) {
-    try {
-      const response = await fetch("/api/planner/request");
-      if (response.ok && response.status !== 204) await answer(await response.json());
-    } catch {
-      // The local UI server may be restarting.
-    }
-    await new Promise((resolve) => setTimeout(resolve, 200));
+const plannerEvents = new EventSource("/api/events");
+let claimingRequest = false;
+
+async function claimPlannerRequest() {
+  if (claimingRequest) return;
+  claimingRequest = true;
+  try {
+    const response = await fetch("/api/planner/request");
+    if (response.ok && response.status !== 204) await answer(await response.json());
+  } catch {
+    // EventSource reconnects automatically when the local UI server restarts.
+  } finally {
+    claimingRequest = false;
   }
 }
+
+plannerEvents.addEventListener("planner-request", () => void claimPlannerRequest());
 
 Object.assign(window, {
   runoraEnsureModel: async () => {
@@ -165,4 +171,3 @@ void hasModelInCache(DEFAULT_MODEL, runoraAppConfig)
     ? "Intelligent planner cached; it will load without downloading."
     : "Intelligent planner downloads once in this browser on first run."))
   .catch(() => report("Intelligent planner downloads once in this browser on first run."));
-void plannerLoop();

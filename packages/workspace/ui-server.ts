@@ -3,6 +3,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import url from "node:url";
+import { chromium, type Browser, type Page } from "playwright";
 import {
   resolveConfig,
   discoverTests,
@@ -33,7 +34,7 @@ import type { ResolvedConfig, TestDefinition } from "./index.js";
 import type { BrowserAction } from "../core/actions.js";
 import type { Planner, PlannerInput } from "../core/planner.js";
 import { ProviderPlanner, type ProviderSettings } from "./provider-planner.js";
-import { createVisionService, type RecordedAction } from "./vision-service.js";
+import type { RecordedAction } from "./vision-service.js";
 
 /**
  * Interactive UI server for Runora Workspace
@@ -51,10 +52,92 @@ interface RecordingSession {
   url: string;
   startTime: number;
   actions: RecordedAction[];
-  visionService?: any;
+  browser: Browser;
+  page: Page;
+  browserLabel: string;
 }
 
 const recordingSessions = new Map<string, RecordingSession>();
+type RecordingBrowser = "chromium" | "chrome" | "msedge";
+
+function recordingBrowserLabel(browser: RecordingBrowser): string {
+  if (browser === "chrome") return "Google Chrome";
+  if (browser === "msedge") return "Microsoft Edge";
+  return "Runora Chromium";
+}
+
+function recordedTestDescription(actions: RecordedAction[]): string {
+  const lines = actions.flatMap((action) => {
+    const target = action.target || "the selected element";
+    if (action.type === "navigate" && action.value) return [`Navigate to ${action.value}`];
+    if (action.type === "click") return [`Click "${target}"`];
+    if (action.type === "fill") {
+      return action.value === "{{password}}"
+        ? [`Enter the saved password in "${target}"`]
+        : [`Enter "${action.value || ""}" in "${target}"`];
+    }
+    if (action.type === "scroll") return [`Scroll ${action.value || "down"}`];
+    return [];
+  });
+  return lines.length ? lines.join("\n") : "Replay recorded user actions";
+}
+
+async function attachPageRecorder(session: RecordingSession): Promise<void> {
+  await session.page.exposeBinding("__runoraRecord", async (_source, candidate: unknown) => {
+    if (!candidate || typeof candidate !== "object") return;
+    const input = candidate as Partial<RecordedAction>;
+    if (!["click", "fill", "navigate", "scroll"].includes(input.type || "")) return;
+    session.actions.push({
+      type: input.type as RecordedAction["type"],
+      target: typeof input.target === "string" ? input.target.slice(0, 300) : undefined,
+      value: typeof input.value === "string" ? input.value.slice(0, 2_000) : undefined,
+      coordinates: input.coordinates,
+      timestamp: Date.now(),
+    });
+  });
+
+  await session.page.addInitScript(() => {
+    const send = (action: Record<string, unknown>) => {
+      void (window as typeof window & { __runoraRecord?: (value: unknown) => Promise<void> }).__runoraRecord?.(action);
+    };
+    const describe = (element: HTMLElement) => {
+      const input = element as HTMLInputElement;
+      return element.getAttribute("aria-label")
+        || element.getAttribute("title")
+        || input.placeholder
+        || element.innerText?.trim().replace(/\s+/g, " ").slice(0, 160)
+        || input.name
+        || element.id
+        || element.tagName.toLowerCase();
+    };
+
+    document.addEventListener("click", (event) => {
+      const rawTarget = event.composedPath().find((entry): entry is HTMLElement => entry instanceof HTMLElement);
+      if (!rawTarget) return;
+      const target = rawTarget.closest<HTMLElement>("button, a, input, select, textarea, [role], [aria-label]") || rawTarget;
+      send({ type: "click", target: describe(target), coordinates: { x: event.clientX, y: event.clientY } });
+    }, true);
+
+    document.addEventListener("change", (event) => {
+      if (!(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement)) return;
+      const input = event.target;
+      const sensitive = input instanceof HTMLInputElement
+        && (input.type === "password" || /password/i.test(input.autocomplete));
+      send({ type: "fill", target: describe(input), value: sensitive ? "{{password}}" : input.value });
+    }, true);
+
+    let scrollTimer: number | undefined;
+    window.addEventListener("scroll", () => {
+      window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(() => send({ type: "scroll", value: "down" }), 150);
+    }, true);
+  });
+
+  session.page.on("framenavigated", (frame) => {
+    if (frame !== session.page.mainFrame() || frame.url() === "about:blank") return;
+    session.actions.push({ type: "navigate", value: frame.url(), timestamp: Date.now() });
+  });
+}
 const WEBLLM_MODEL_SOURCE = `https://huggingface.co/mlc-ai/${WEBLLM_MODEL}/resolve/main`;
 const WEBLLM_LIB_SOURCE = "https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/v0_2_84/base/Llama-3.2-1B-Instruct-q4f16_1_cs1k-webgpu.wasm";
 
@@ -121,21 +204,32 @@ class BrowserPlannerBroker implements Planner {
   private sequence = 0;
   private requests: Array<{ id: string; input: PlannerInput }> = [];
   private pending = new Map<string, { resolve(action: BrowserAction): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>();
+  private listeners = new Set<() => void>();
 
   next(input: PlannerInput): Promise<BrowserAction> {
     const id = `planner-${Date.now()}-${++this.sequence}`;
-    this.requests.push({ id, input });
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error("Browser planner did not respond within 10 minutes."));
       }, 600_000);
       this.pending.set(id, { resolve, reject, timer });
+      this.requests.push({ id, input });
+      for (const listener of this.listeners) listener();
     });
   }
 
   take() {
     return this.requests.shift();
+  }
+
+  hasRequests() {
+    return this.requests.length > 0;
+  }
+
+  subscribe(listener: () => void) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 
   respond(id: string, action?: BrowserAction, error?: string) {
@@ -309,16 +403,18 @@ async function parseJsonBody(req: http.IncomingMessage): Promise<any> {
 export async function startUIServer(
   workspaceDir: string,
   port: number = 3001,
-  options: { announce?: boolean } = {},
+  options: { announce?: boolean; recordingHeadless?: boolean } = {},
 ): Promise<http.Server> {
   currentConfig = await resolveConfig(workspaceDir);
 
   const eventClients = new Set<http.ServerResponse>();
-  const publishWorkspaceChange = (collection: string) => {
-    const message = `event: workspace-change\ndata: ${JSON.stringify({ collection })}\n\n`;
+  const publishEvent = (event: string, data: unknown) => {
+    const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
     for (const client of eventClients) client.write(message);
   };
+  const publishWorkspaceChange = (collection: string) => publishEvent("workspace-change", { collection });
   const unsubscribeWorkspace = subscribeWorkspaceChanges(currentConfig.artifacts, publishWorkspaceChange);
+  const unsubscribePlanner = browserPlanner.subscribe(() => publishEvent("planner-request", {}));
 
   const server = http.createServer(async (req, res) => {
     // The workspace owns local credentials. Reject cross-origin browser calls
@@ -355,6 +451,7 @@ export async function startUIServer(
       });
       res.write("retry: 2000\n\n");
       eventClients.add(res);
+      if (browserPlanner.hasRequests()) res.write("event: planner-request\ndata: {}\n\n");
       req.once("close", () => eventClients.delete(res));
       return;
     }
@@ -590,6 +687,9 @@ export async function startUIServer(
           name: body.name || "Untitled",
           task: body.task || "Test task",
           url: body.url,
+          secretProfileIds: Array.isArray(body.secretProfileIds)
+            ? body.secretProfileIds.filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+            : undefined,
           secretProfileId: body.secretProfileId,
         });
 
@@ -607,26 +707,45 @@ export async function startUIServer(
 
     // Recording API: Start a recording session
     if (pathname === "/api/recording/start" && req.method === "POST") {
+      let browser: Browser | undefined;
       try {
         const body = await parseJsonBody(req);
+        const targetUrl = new URL(body.url);
+        if (!["http:", "https:"].includes(targetUrl.protocol)) throw new Error("Recording URL must use HTTP or HTTPS");
+        const recordingBrowser = body.browser as RecordingBrowser;
+        if (!["chromium", "chrome", "msedge"].includes(recordingBrowser)) throw new Error("Choose a supported recording browser");
         const sessionId = "rec-" + Date.now() + "-" + Math.random().toString(36).slice(2, 9);
+        browser = await chromium.launch({
+          headless: options.recordingHeadless ?? false,
+          ...(recordingBrowser === "chromium" ? {} : { channel: recordingBrowser }),
+        });
+        const context = await browser.newContext();
+        const page = await context.newPage();
 
         const session: RecordingSession = {
           id: sessionId,
-          url: body.url,
+          url: targetUrl.href,
           startTime: Date.now(),
           actions: [],
+          browser,
+          page,
+          browserLabel: recordingBrowserLabel(recordingBrowser),
         };
 
         recordingSessions.set(sessionId, session);
+        await attachPageRecorder(session);
+        await page.goto(targetUrl.href, { waitUntil: "domcontentloaded" });
 
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({
           sessionId,
-          url: body.url,
+          url: targetUrl.href,
+          browser: recordingBrowser,
+          browserLabel: session.browserLabel,
           recordingStarted: true,
         }));
       } catch (error) {
+        await browser?.close().catch(() => undefined);
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: String(error) }));
       }
@@ -717,21 +836,7 @@ export async function startUIServer(
           return;
         }
 
-        // Generate description using vision service
-        let description = "Replay recorded actions";
-        try {
-          const visionService = createVisionService();
-          await visionService.initialize();
-          description = await visionService.generateRecordingDescription(session.actions);
-          await visionService.close();
-        } catch (error) {
-          console.error("Vision analysis failed, using fallback:", error);
-          // Fallback: use simple description
-          const actionTypes = session.actions.map(a => a.type);
-          if (actionTypes.includes("navigate")) description = "Navigate and perform recorded actions";
-          else if (actionTypes.some(t => t === "click")) description = "Click elements and complete flow";
-          else description = "Replay recorded user actions";
-        }
+        const description = recordedTestDescription(session.actions);
 
         const result = {
           recordingStopped: true,
@@ -741,6 +846,7 @@ export async function startUIServer(
         };
 
         // Clean up session
+        await session.browser.close();
         recordingSessions.delete(sessionId);
 
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -1037,8 +1143,11 @@ export async function startUIServer(
 
   server.once("close", () => {
     unsubscribeWorkspace();
+    unsubscribePlanner();
     for (const client of eventClients) client.end();
     eventClients.clear();
+    for (const session of recordingSessions.values()) void session.browser.close();
+    recordingSessions.clear();
     void closeWorkspaceStore(currentConfig.artifacts);
   });
   return server;
