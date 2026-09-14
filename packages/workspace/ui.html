@@ -945,7 +945,11 @@
     function renderSuggestions(run, step) {
       if (run?.status !== 'failed') return '';
       const suggestions = [];
-      const errorType = run?.failure?.execution?.errorType;
+      const rawError = step?.result?.error || run?.failure?.message || '';
+      const errorType = run?.failure?.execution?.errorType
+        || (rawError.includes('intercepts pointer events') ? 'target_blocked' : '')
+        || (rawError.includes('not found') ? 'target_not_found' : '')
+        || (rawError.includes('timeout') ? 'timeout' : '');
       const trace = evidenceFiles(run).trace;
       if (errorType === 'target_blocked') {
         suggestions.push({ label: 'Inspect overlapping element', action: 'expand' });
