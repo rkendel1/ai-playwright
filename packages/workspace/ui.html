@@ -694,12 +694,21 @@
         </div>
         <div class="form-field">
           <label for="new-test-task">Task</label>
-          <textarea id="new-test-task"></textarea>
+          <textarea id="new-test-task" placeholder="Click Search button&#10;Fill search box with &quot;great dane puppies&quot;&#10;Wait for results to load&#10;Assert results visible"></textarea>
+        </div>
+        <div class="form-field" style="margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <label>Flow Preview</label>
+            <button class="secondary-button" type="button" onclick="previewFlowSteps()" style="font-size: 12px; padding: 6px 10px;">Preview Steps</button>
+          </div>
+          <div id="flow-preview" class="step-list" style="display: none; max-height: 300px; overflow-y: auto;"></div>
         </div>
         <div class="form-field">
-          <label for="new-test-secret">Credential profile (optional)</label>
-          <select id="new-test-secret"><option value="">No saved credentials</option></select>
-          <small class="muted">The test stores only this vault reference—not the username or password.</small>
+          <label>Credential profiles (optional)</label>
+          <div id="new-test-secrets-list" style="display: grid; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #dce6f5;">
+            <!-- Multi-credential checkboxes populated by JavaScript -->
+          </div>
+          <small class="muted" style="display: block; margin-top: 8px;">Select one or more profiles. The test stores only vault references—not usernames or passwords.</small>
         </div>
       </div>
       <div class="modal-actions">
@@ -844,6 +853,129 @@
         providerSelect.innerHTML = secretOptions(provider === 'openai' || provider === 'anthropic' ? provider : null, 'Use a temporary key or environment variable');
         if (state.secrets.some((profile) => profile.id === selected)) providerSelect.value = selected;
       }
+      syncMultiSecretSelectors();
+    }
+
+    function syncMultiSecretSelectors() {
+      const secretsList = document.getElementById('new-test-secrets-list');
+      if (!secretsList) return;
+
+      const credentials = state.secrets.filter((profile) => profile.kind === 'credentials');
+      if (!credentials.length) {
+        secretsList.innerHTML = '<small style="color: #5d7694;">No saved credential profiles. Create one in the Secrets Vault.</small>';
+        return;
+      }
+
+      // Get currently selected secrets from form state
+      const selected = window.selectedSecretProfileIds || [];
+
+      secretsList.innerHTML = credentials.map((profile) => `
+        <label style="display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer;">
+          <input type="checkbox" value="${escapeHtml(profile.id)}"
+            ${selected.includes(profile.id) ? 'checked' : ''}
+            onchange="updateSelectedSecrets()" />
+          <span>${escapeHtml(profile.name)}</span>
+          <small style="color: #5d7694;">(${escapeHtml(profile.kind)})</small>
+        </label>
+      `).join('');
+    }
+
+    function updateSelectedSecrets() {
+      const checkboxes = document.querySelectorAll('#new-test-secrets-list input[type="checkbox"]');
+      window.selectedSecretProfileIds = Array.from(checkboxes)
+        .filter(cb => cb.checked)
+        .map(cb => cb.value);
+    }
+
+    function parseFlowSteps(taskDescription) {
+      if (!taskDescription.trim()) return [];
+      const lines = taskDescription.split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'));
+
+      const steps = lines.map((line, index) => {
+        let type = 'natural';
+        let label = line;
+
+        if (/^click\s+/i.test(line)) {
+          type = 'click';
+          label = line.substring(6).trim();
+        } else if (/^fill\s+/i.test(line) || /^enter\s+/i.test(line)) {
+          type = 'fill';
+          label = line.substring(line.search(/\s+/i) + 1).trim();
+        } else if (/^wait\s+/i.test(line)) {
+          type = 'wait';
+          label = line.substring(5).trim();
+        } else if (/^navigate\s+/i.test(line) || /^go\s+/i.test(line)) {
+          type = 'navigate';
+          label = line.substring(line.search(/\s+/i) + 1).trim();
+        } else if (/^pause/i.test(line)) {
+          type = 'pause';
+          label = line.substring(5).trim() || 'Pause for review';
+        } else if (/^screenshot/i.test(line)) {
+          type = 'screenshot';
+          label = 'Capture evidence';
+        } else if (/^assert\s+/i.test(line)) {
+          type = 'assert';
+          label = line.substring(7).trim();
+        } else if (/^select\s+/i.test(line)) {
+          type = 'select';
+          label = line.substring(7).trim();
+        }
+
+        return { index: index + 1, type, label, status: 'pending' };
+      });
+
+      return steps;
+    }
+
+    function previewFlowSteps() {
+      const taskValue = document.getElementById('new-test-task').value;
+      const steps = parseFlowSteps(taskValue);
+      const preview = document.getElementById('flow-preview');
+
+      if (!steps.length) {
+        preview.style.display = 'none';
+        return;
+      }
+
+      const typeColors = {
+        click: '#2347b1',
+        fill: '#20744a',
+        wait: '#9c6a00',
+        navigate: '#0b3e8f',
+        pause: '#9c6a00',
+        screenshot: '#8b5c00',
+        assert: '#2347b1',
+        select: '#5b7f8f',
+        natural: '#5d7694'
+      };
+
+      const typeIcons = {
+        click: '🖱️',
+        fill: '✏️',
+        wait: '⏳',
+        navigate: '🔗',
+        pause: '⏸',
+        screenshot: '📸',
+        assert: '✓',
+        select: '▼',
+        natural: '🤖'
+      };
+
+      preview.innerHTML = steps.map((step) => `
+        <div class="step-button" style="border-color: ${typeColors[step.type]};">
+          <div class="status-row">
+            <div class="card-title">${typeIcons[step.type]} Step ${step.index}: ${step.type.charAt(0).toUpperCase() + step.type.slice(1)}</div>
+            <span class="status-pill" style="background: #eef4ff; color: #2347b1; font-size: 11px;">${step.type.toUpperCase()}</span>
+          </div>
+          <div class="card-meta" style="color: #10233f; font-size: 13px; font-weight: 500;">
+            <div>${escapeHtml(step.label)}</div>
+          </div>
+        </div>
+      `).join('');
+
+      preview.style.display = 'grid';
     }
 
     async function loadSecrets() {
@@ -1752,8 +1884,9 @@
       document.getElementById('new-test-name').value = '';
       document.getElementById('new-test-url').value = 'http://localhost:3000';
       document.getElementById('new-test-task').value = '';
+      window.selectedSecretProfileIds = [];
       syncSecretSelectors();
-      document.getElementById('new-test-secret').value = '';
+      document.getElementById('flow-preview').style.display = 'none';
       document.getElementById('new-test-modal').classList.remove('hidden');
       document.getElementById('new-test-name').focus();
     }
@@ -1768,8 +1901,9 @@
       document.getElementById('new-test-name').value = test.name;
       document.getElementById('new-test-url').value = test.url || '';
       document.getElementById('new-test-task').value = test.task;
+      window.selectedSecretProfileIds = test.secretProfileIds || (test.secretProfileId ? [test.secretProfileId] : []);
       syncSecretSelectors();
-      document.getElementById('new-test-secret').value = test.secretProfileId || '';
+      document.getElementById('flow-preview').style.display = 'none';
       document.getElementById('new-test-modal').classList.remove('hidden');
       document.getElementById('new-test-name').focus();
     }
@@ -1783,7 +1917,7 @@
       const name = document.getElementById('new-test-name').value.trim();
       const url = document.getElementById('new-test-url').value.trim();
       const task = document.getElementById('new-test-task').value.trim();
-      const secretProfileId = document.getElementById('new-test-secret').value;
+      const secretProfileIds = window.selectedSecretProfileIds || [];
       if (!name || !task) {
         alert('Name and task are required.');
         return;
@@ -1797,7 +1931,13 @@
         const response = await fetch(endpoint, {
           method,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, task, url: url || undefined, secretProfileId: secretProfileId || null }),
+          body: JSON.stringify({
+            name,
+            task,
+            url: url || undefined,
+            secretProfileIds: secretProfileIds.length > 0 ? secretProfileIds : undefined,
+            secretProfileId: undefined
+          }),
         });
         const payload = await readResponseBody(response);
         if (!response.ok) {

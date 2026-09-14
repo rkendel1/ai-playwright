@@ -34,13 +34,16 @@ export function createTest(
   }
 
   // Create test file with stable format
+  const secretProfilesLine = testDef.secretProfileIds && testDef.secretProfileIds.length > 0
+    ? `\n  secretProfileIds: [${testDef.secretProfileIds.map(id => `"${escapeString(id)}"`).join(", ")}],`
+    : (testDef.secretProfileId ? `\n  secretProfileId: "${escapeString(testDef.secretProfileId)}",` : "");
+
   const content = `export default {
   id: "${id}",
   name: "${escapeString(testDef.name)}",
   task: "${escapeString(testDef.task)}",${
     testDef.url ? `\n  url: "${escapeString(testDef.url)}",` : ""
-  }${testDef.secretProfileId ? `\n  secretProfileId: "${escapeString(testDef.secretProfileId)}",` : ""
-  }
+  }${secretProfilesLine}
 };
 `;
 
@@ -51,6 +54,7 @@ export function createTest(
     name: testDef.name,
     task: testDef.task,
     url: testDef.url,
+    secretProfileIds: testDef.secretProfileIds,
     secretProfileId: testDef.secretProfileId,
   };
 }
@@ -74,24 +78,34 @@ export function updateTest(
   }
 
   // Merge updates
+  const secretProfileIds = Object.prototype.hasOwnProperty.call(updates, "secretProfileIds")
+    ? (Array.isArray(updates.secretProfileIds) ? updates.secretProfileIds : undefined)
+    : (Array.isArray(current.secretProfileIds) ? current.secretProfileIds : undefined);
+
+  const secretProfileId = Object.prototype.hasOwnProperty.call(updates, "secretProfileId")
+    ? (typeof updates.secretProfileId === "string" ? updates.secretProfileId : undefined)
+    : (typeof current.secretProfileId === "string" ? current.secretProfileId : undefined);
+
   const updated = {
     id: typeof current.id === "string" ? current.id : testId,
     name: updates.name ?? (typeof current.name === "string" ? current.name : testId),
     task: updates.task ?? (typeof current.task === "string" ? current.task : ""),
     url: updates.url ?? (typeof current.url === "string" ? current.url : undefined),
-    secretProfileId: Object.prototype.hasOwnProperty.call(updates, "secretProfileId")
-      ? (typeof updates.secretProfileId === "string" ? updates.secretProfileId : undefined)
-      : (typeof current.secretProfileId === "string" ? current.secretProfileId : undefined),
+    secretProfileIds,
+    secretProfileId,
   };
 
   // Write updated file
+  const secretProfilesLine = updated.secretProfileIds && updated.secretProfileIds.length > 0
+    ? `\n  secretProfileIds: [${updated.secretProfileIds.map(id => `"${id.replace(/"/g, '\\"')}"`).join(", ")}],`
+    : (updated.secretProfileId ? `\n  secretProfileId: "${updated.secretProfileId.replace(/"/g, '\\"')}",` : "");
+
   const newContent = `export default {
   id: "${updated.id}",
   name: "${updated.name.replace(/"/g, '\\"')}",
   task: "${updated.task.replace(/"/g, '\\"')}",${
     updated.url ? `\n  url: "${updated.url.replace(/"/g, '\\"')}",` : ""
-  }${updated.secretProfileId ? `\n  secretProfileId: "${updated.secretProfileId.replace(/"/g, '\\"')}",` : ""
-  }
+  }${secretProfilesLine}
 };
 `;
 
@@ -129,6 +143,7 @@ export function getTest(
       name: typeof def.name === "string" ? def.name : testId,
       task: typeof def.task === "string" ? def.task : "",
       url: typeof def.url === "string" ? def.url : undefined,
+      secretProfileIds: Array.isArray(def.secretProfileIds) ? def.secretProfileIds : undefined,
       secretProfileId: typeof def.secretProfileId === "string" ? def.secretProfileId : undefined,
     };
   } catch {
