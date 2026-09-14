@@ -3,7 +3,6 @@ import { FlowParser, FlowOrchestrator, StepScheduler, type TestStep } from "../f
 import type { Page } from "playwright";
 import type { Observation } from "../observer.js";
 import type { BrowserAction } from "../action-schema.js";
-import type { TestStep } from "../flow-orchestrator.js";
 
 describe("FlowParser", () => {
   describe("parsing natural language steps", () => {
@@ -265,7 +264,6 @@ describe("StepScheduler", () => {
       url: "https://example.com",
       elements: [],
       viewport: { width: 1280, height: 720, scrollX: 0, scrollY: 0, pageWidth: 1280, pageHeight: 3000 },
-      generation: 1,
     } as Observation);
 
     mockPlanner = vi.fn().mockResolvedValue({

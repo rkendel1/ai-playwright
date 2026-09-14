@@ -703,11 +703,13 @@
           <textarea id="new-test-task" placeholder="Click Search button&#10;Fill search box with &quot;great dane puppies&quot;&#10;Wait for results to load&#10;Assert results visible"></textarea>
         </div>
         <div class="form-field" style="margin-bottom: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <label>Flow Preview</label>
-            <button class="secondary-button" type="button" onclick="previewFlowSteps()" style="font-size: 12px; padding: 6px 10px;">Preview Steps</button>
-          </div>
-          <div id="flow-preview" class="step-list" style="display: none; max-height: 300px; overflow-y: auto;"></div>
+          <details style="border-top: 1px solid #dce6f5; padding-top: 12px;">
+            <summary style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: #274160; user-select: none; padding-bottom: 12px;">
+              <span>Flow Preview</span>
+              <button class="secondary-button" type="button" onclick="event.stopPropagation(); previewFlowSteps()" style="font-size: 12px; padding: 6px 10px; margin: 0;">Preview Steps</button>
+            </summary>
+            <div id="flow-preview" class="step-list" style="display: grid; max-height: 300px; overflow-y: auto; gap: 8px;"></div>
+          </details>
         </div>
         <div class="form-field">
           <label>Credential profiles (optional)</label>
@@ -939,6 +941,7 @@
       const taskValue = document.getElementById('new-test-task').value;
       const steps = parseFlowSteps(taskValue);
       const preview = document.getElementById('flow-preview');
+      const detailsElement = preview.closest('details');
 
       if (!steps.length) {
         preview.style.display = 'none';
@@ -982,6 +985,11 @@
       `).join('');
 
       preview.style.display = 'grid';
+
+      // Open the details element to show the preview
+      if (detailsElement) {
+        detailsElement.open = true;
+      }
     }
 
     async function loadSecrets() {
