@@ -521,11 +521,17 @@
       border: 1px solid #dce6f5;
       box-shadow: 0 24px 60px rgba(16, 35, 63, 0.22);
       padding: 24px;
+      max-height: 90vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
     }
     .form-grid {
       display: grid;
       gap: 16px;
       margin-top: 20px;
+      flex: 1;
+      overflow-y: auto;
     }
     .form-field {
       display: grid;
