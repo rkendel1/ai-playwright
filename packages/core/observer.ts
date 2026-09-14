@@ -6,6 +6,7 @@ export type ElementObservation = {
   name?: string;
   ariaLabel?: string;
   value?: string;
+  hasValue?: boolean;
   inputType?: string;
   autocomplete?: string;
   options?: Array<{ label: string; value: string }>;
@@ -104,6 +105,7 @@ export async function observe(page: Page): Promise<Observation> {
         .find((v) => v.length > 0) || tag).slice(0, 240);
       // Password values must never cross the browser observation boundary.
       const value = "value" in el && inputType !== "password" ? String((el as HTMLInputElement).value ?? "") : undefined;
+      const hasValue = "value" in el ? String((el as HTMLInputElement).value ?? "").length > 0 : undefined;
       const options = tag === "select"
         ? Array.from((el as HTMLSelectElement).options).map((option) => ({ label: option.text.trim(), value: option.value }))
         : undefined;
@@ -115,6 +117,7 @@ export async function observe(page: Page): Promise<Observation> {
         name,
         ariaLabel: aria || undefined,
         value,
+        hasValue,
         inputType,
         autocomplete: el.getAttribute("autocomplete") || undefined,
         options,

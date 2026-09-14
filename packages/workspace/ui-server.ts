@@ -66,17 +66,41 @@ function recordingBrowserLabel(browser: RecordingBrowser): string {
   return "Runora Chromium";
 }
 
-function recordedTestDescription(actions: RecordedAction[]): string {
-  const lines = actions.flatMap((action) => {
+export function recordedTestDescription(actions: RecordedAction[]): string {
+  const compactActions = actions.filter((action, index) => {
+    const previous = actions[index - 1];
+    const next = actions[index + 1];
+    if (action.type === "navigate" && previous?.type === "navigate" && previous.value === action.value) return false;
+    if (action.type === "click" && next?.type === "fill" && action.target && action.target === next.target) return false;
+    return true;
+  });
+  let sawNavigation = false;
+  let previousTimestamp: number | undefined;
+  const lines = compactActions.flatMap((action) => {
+    const pacing = previousTimestamp && action.timestamp - previousTimestamp >= 750
+      ? [`Wait ${Math.min(1500, Math.max(500, action.timestamp - previousTimestamp))}ms for the page to settle`]
+      : [];
+    previousTimestamp = action.timestamp;
     const target = action.target || "the selected element";
-    if (action.type === "navigate" && action.value) return [`Navigate to ${action.value}`];
-    if (action.type === "click") return [`Click "${target}"`];
-    if (action.type === "fill") {
-      if (action.value === "{{password}}") return [`Enter the saved password in "${target}"`];
-      if (action.value === "{{username}}") return [`Enter the saved username or email in "${target}"`];
-      return [`Enter "${action.value || ""}" in "${target}"`];
+    if (action.type === "navigate" && action.value) {
+      if (!sawNavigation) {
+        sawNavigation = true;
+        return [...pacing, `Navigate to ${action.value}`];
+      }
+      let destination = action.value;
+      try {
+        const parsed = new URL(action.value);
+        destination = `${parsed.pathname}${parsed.search}${parsed.hash}` || "/";
+      } catch { /* Retain the recorded value when it is not an absolute URL. */ }
+      return [...pacing, `Wait for the page transition and verify the URL includes "${destination}"`];
     }
-    if (action.type === "scroll") return [`Scroll ${action.value || "down"}`];
+    if (action.type === "click") return [...pacing, `Click "${target}"`];
+    if (action.type === "fill") {
+      if (action.value === "{{password}}") return [...pacing, `Enter the saved password in "${target}"`];
+      if (action.value === "{{username}}") return [...pacing, `Enter the saved username or email in "${target}"`];
+      return [...pacing, `Enter "${action.value || ""}" in "${target}"`];
+    }
+    if (action.type === "scroll") return [...pacing, `Scroll ${action.value || "down"}`];
     return [];
   });
   return lines.length ? lines.join("\n") : "Replay recorded user actions";
@@ -102,12 +126,17 @@ async function attachPageRecorder(session: RecordingSession): Promise<void> {
     };
     const describe = (element: HTMLElement) => {
       const input = element as HTMLInputElement;
+      const label = "labels" in input
+        ? Array.from(input.labels ?? []).map((entry) => entry.textContent?.trim()).find(Boolean)
+        : undefined;
       return element.getAttribute("aria-label")
         || element.getAttribute("title")
-        || input.placeholder
-        || element.innerText?.trim().replace(/\s+/g, " ").slice(0, 160)
+        || label
         || input.name
         || element.id
+        || (input.type === "password" ? "Password" : undefined)
+        || input.placeholder
+        || element.innerText?.trim().replace(/\s+/g, " ").slice(0, 160)
         || element.tagName.toLowerCase();
     };
 

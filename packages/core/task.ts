@@ -130,7 +130,9 @@ function groundedFormAction(task: string, observation: Awaited<ReturnType<typeof
   }));
   for (const field of editable) {
     const desired = requestedFieldValue(task, field, secrets);
-    if (!desired || completedFields.has(field.id) || (field.value || "").trim() === desired) continue;
+    const populatedPassword = field.inputType === "password"
+      && (field.hasValue === true || (field.hasValue === undefined && completedFields.has(field.id)));
+    if (!desired || populatedPassword || (field.value || "").trim() === desired) continue;
     if (field.role === "combobox" && field.options?.length) {
       return { type: "select", target: { observationId: observation.id, elementId: field.id }, value: desired, reason: `Select the requested value for ${field.name || "field"}`, confidence: 0.95, risk: "write" };
     }

@@ -28,10 +28,16 @@ export class PlaywrightExecutor implements BrowserExecutor {
           await page.waitForLoadState("networkidle", { timeout: 1500 }).catch(() => undefined);
           await page.waitForTimeout(150);
           return { status: "success" };
-        case "click":
+        case "click": {
+          const previousUrl = page.url();
           await (await resolveLocator(page, action.target.elementId)).click({ timeout: 5000 });
-          await page.waitForTimeout(150);
+          await page.waitForTimeout(250);
+          if (page.url() !== previousUrl) {
+            await page.waitForLoadState("domcontentloaded", { timeout: 1500 }).catch(() => undefined);
+            await page.waitForLoadState("networkidle", { timeout: 750 }).catch(() => undefined);
+          }
           return { status: "success" };
+        }
         case "fill":
           await (await resolveLocator(page, action.target.elementId)).fill(action.value);
           return { status: "success" };
