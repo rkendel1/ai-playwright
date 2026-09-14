@@ -593,6 +593,59 @@ export async function startUIServer(
       return;
     }
 
+    // Recording API: Start a recording session
+    if (pathname === "/api/recording/start" && req.method === "POST") {
+      try {
+        const body = await parseJsonBody(req);
+        const sessionId = "rec-" + Date.now() + "-" + Math.random().toString(36).slice(2, 9);
+        // Store session in memory (in production, use persistent storage)
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          sessionId,
+          url: body.url,
+          recordingStarted: true,
+        }));
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: String(error) }));
+      }
+      return;
+    }
+
+    // Recording API: Get recorded actions
+    if (pathname && pathname.startsWith("/api/recording/") && pathname.includes("/actions") && req.method === "GET") {
+      try {
+        // Return sample actions for MVP
+        // In production, track actual Playwright events
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          actions: [
+            { description: "Navigated to " + (pathname.split("/")[2] ? "application" : "page") },
+            { description: "Clicked login button" },
+            { description: "Filled email field" },
+            { description: "Filled password field" },
+            { description: "Clicked sign in button" },
+          ],
+        }));
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: String(error) }));
+      }
+      return;
+    }
+
+    // Recording API: Stop recording
+    if (pathname && pathname.startsWith("/api/recording/") && pathname.includes("/stop") && req.method === "POST") {
+      try {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ recordingStopped: true }));
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: String(error) }));
+      }
+      return;
+    }
+
     // API: Get single test
     if (pathname && pathname.startsWith("/api/tests/") && !pathname.includes("/run") && !pathname.includes("/runs") && req.method === "GET") {
       try {

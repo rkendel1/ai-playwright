@@ -712,7 +712,65 @@
       </div>
       <div class="modal-actions">
         <button class="ghost-button" type="button" onclick="closeNewTestForm()">Cancel</button>
+        <button class="secondary-button" type="button" onclick="switchToRecordMode()" style="margin-right: auto;">Record Instead</button>
         <button class="primary-button" type="button" onclick="submitNewTestForm()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="record-test-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="record-test-title">
+    <div class="modal-card" style="width: min(900px, 100%); max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="split-header">
+        <div>
+          <p class="eyebrow" style="margin-bottom: 6px;">Record Test</p>
+          <h2 id="record-test-title" style="margin-bottom: 8px;">Record User Actions</h2>
+          <p class="muted">Perform your test actions in the browser. We'll capture everything and create a test from it.</p>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; flex: 1; overflow: hidden; margin-top: 16px;">
+        <!-- Browser preview area -->
+        <div style="display: flex; flex-direction: column; gap: 12px; min-height: 0;">
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input id="record-test-url" type="url" placeholder="http://localhost:3000" style="flex: 1; border: 1px solid #c9d7ea; border-radius: 8px; padding: 8px 12px; background: #fbfdff;" />
+            <button class="primary-button" type="button" onclick="startRecording()" id="start-recording-btn">Start Recording</button>
+          </div>
+          <div id="browser-preview" style="border: 2px solid #dce6f5; border-radius: 12px; background: #f5f8fc; flex: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; color: #5d7694;">
+            <div style="text-align: center;">
+              <div style="font-size: 14px;">Browser will appear here</div>
+              <div style="font-size: 12px; color: #8b9ab9; margin-top: 8px;">Enter URL and click "Start Recording"</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Actions panel -->
+        <div style="display: flex; flex-direction: column; gap: 12px; border-left: 1px solid #dce6f5; padding-left: 16px; overflow-y: auto;">
+          <div>
+            <h3 style="font-size: 13px; font-weight: 700; color: #274160; margin-bottom: 8px;">Recording Status</h3>
+            <div id="recording-status" style="font-size: 12px; color: #5d7694;">Not recording</div>
+          </div>
+
+          <div>
+            <h3 style="font-size: 13px; font-weight: 700; color: #274160; margin-bottom: 8px;">Actions Captured</h3>
+            <div id="actions-list" style="display: grid; gap: 6px; max-height: 300px; overflow-y: auto; font-size: 12px;">
+              <div style="color: #8b9ab9; padding: 8px; text-align: center;">No actions yet</div>
+            </div>
+          </div>
+
+          <div>
+            <h3 style="font-size: 13px; font-weight: 700; color: #274160; margin-bottom: 8px;">Test Details</h3>
+            <div style="display: grid; gap: 8px;">
+              <input id="record-test-name" type="text" placeholder="Test name" style="border: 1px solid #c9d7ea; border-radius: 8px; padding: 8px; background: #fbfdff; font-size: 12px;" />
+              <textarea id="record-test-description" placeholder="What does this test do?" style="border: 1px solid #c9d7ea; border-radius: 8px; padding: 8px; background: #fbfdff; font-size: 12px; min-height: 60px; resize: vertical;"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions" style="margin-top: 16px; border-top: 1px solid #dce6f5; padding-top: 16px;">
+        <button class="ghost-button" type="button" onclick="closeRecordMode()">Cancel</button>
+        <button class="secondary-button" type="button" onclick="stopRecording()" id="stop-recording-btn" disabled>Stop Recording</button>
+        <button class="primary-button" type="button" onclick="saveRecordedTest()" id="save-test-btn" disabled>Save Test</button>
       </div>
     </div>
   </div>
@@ -1955,6 +2013,179 @@
       } catch (error) {
         alert('Error saving test: ' + error);
       }
+    }
+
+    // Recording mode functions
+    let recordingSession = null;
+
+    function switchToRecordMode() {
+      closeNewTestForm();
+      recordingSession = {
+        url: document.getElementById('new-test-url').value || 'http://localhost:3000',
+        name: document.getElementById('new-test-name').value,
+        actions: [],
+        isRecording: false,
+      };
+      document.getElementById('record-test-url').value = recordingSession.url;
+      document.getElementById('record-test-name').value = recordingSession.name;
+      document.getElementById('record-test-modal').classList.remove('hidden');
+    }
+
+    function closeRecordMode() {
+      document.getElementById('record-test-modal').classList.add('hidden');
+      recordingSession = null;
+    }
+
+    async function startRecording() {
+      if (!recordingSession) return;
+
+      const url = document.getElementById('record-test-url').value.trim();
+      if (!url) {
+        alert('Please enter a URL');
+        return;
+      }
+
+      recordingSession.url = url;
+      recordingSession.actions = [];
+      recordingSession.isRecording = true;
+
+      document.getElementById('start-recording-btn').disabled = true;
+      document.getElementById('stop-recording-btn').disabled = false;
+      document.getElementById('recording-status').textContent = '🔴 Recording...';
+      document.getElementById('actions-list').innerHTML = '';
+
+      // Open recording session on server
+      try {
+        const response = await fetch('/api/recording/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const payload = await readResponseBody(response);
+        if (!response.ok) {
+          alert('Error starting recording: ' + (payload.error || response.statusText));
+          recordingSession.isRecording = false;
+          document.getElementById('start-recording-btn').disabled = false;
+          document.getElementById('stop-recording-btn').disabled = true;
+          return;
+        }
+        recordingSession.sessionId = payload.sessionId;
+        document.getElementById('browser-preview').innerHTML = `<iframe src="${escapeHtml(payload.url)}" style="width: 100%; height: 100%; border: none; border-radius: 10px;"></iframe>`;
+
+        // Poll for actions
+        pollRecordedActions();
+      } catch (error) {
+        alert('Error starting recording: ' + error);
+        recordingSession.isRecording = false;
+      }
+    }
+
+    async function pollRecordedActions() {
+      if (!recordingSession?.isRecording || !recordingSession.sessionId) return;
+
+      try {
+        const response = await fetch('/api/recording/' + recordingSession.sessionId + '/actions');
+        const payload = await readResponseBody(response);
+        if (response.ok && Array.isArray(payload.actions)) {
+          recordingSession.actions = payload.actions;
+          updateActionsList();
+        }
+      } catch (error) {
+        console.error('Error polling actions:', error);
+      }
+
+      if (recordingSession?.isRecording) {
+        setTimeout(pollRecordedActions, 500);
+      }
+    }
+
+    function updateActionsList() {
+      const list = document.getElementById('actions-list');
+      if (recordingSession.actions.length === 0) {
+        list.innerHTML = '<div style="color: #8b9ab9; padding: 8px; text-align: center;">Waiting for actions...</div>';
+        return;
+      }
+
+      list.innerHTML = recordingSession.actions.map((action, idx) => `
+        <div style="background: #eef4ff; border-left: 3px solid #2347b1; padding: 8px; border-radius: 4px; color: #10233f;">
+          <div style="font-weight: 600; font-size: 11px;">Step ${idx + 1}</div>
+          <div style="font-size: 11px; margin-top: 4px; color: #5d7694;">${escapeHtml(action.description)}</div>
+        </div>
+      `).join('');
+    }
+
+    async function stopRecording() {
+      if (!recordingSession) return;
+
+      recordingSession.isRecording = false;
+      document.getElementById('start-recording-btn').disabled = false;
+      document.getElementById('stop-recording-btn').disabled = true;
+      document.getElementById('recording-status').textContent = '⏹️ Recording stopped. Review and save below.';
+
+      if (recordingSession.sessionId) {
+        try {
+          await fetch('/api/recording/' + recordingSession.sessionId + '/stop', { method: 'POST' });
+        } catch (error) {
+          console.error('Error stopping recording:', error);
+        }
+      }
+
+      document.getElementById('save-test-btn').disabled = false;
+    }
+
+    async function saveRecordedTest() {
+      if (!recordingSession || recordingSession.actions.length === 0) {
+        alert('No actions recorded');
+        return;
+      }
+
+      const name = document.getElementById('record-test-name').value.trim();
+      const url = document.getElementById('record-test-url').value.trim();
+      let description = document.getElementById('record-test-description').value.trim();
+
+      if (!name) {
+        alert('Please enter a test name');
+        return;
+      }
+
+      // If no description provided, generate one from actions
+      if (!description) {
+        description = generateTestDescription(recordingSession.actions);
+      }
+
+      try {
+        const response = await fetch('/api/tests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            task: description,
+            url: url || undefined,
+          }),
+        });
+        const payload = await readResponseBody(response);
+        if (!response.ok) {
+          alert('Error saving test: ' + (payload.error || response.statusText));
+          return;
+        }
+        closeRecordMode();
+        await refresh();
+        setSelectedTest(payload.id);
+        showFeedback('Test saved from recording');
+      } catch (error) {
+        alert('Error saving test: ' + error);
+      }
+    }
+
+    function generateTestDescription(actions) {
+      // Convert recorded actions to natural language description
+      const descriptions = actions.map(a => a.description).filter(Boolean);
+      if (descriptions.length === 0) return 'Replay recorded actions';
+
+      // Group similar actions and create a summary
+      const summary = descriptions.slice(0, 3).join(', ');
+      const remaining = descriptions.length > 3 ? ` and ${descriptions.length - 3} more actions` : '';
+      return summary + remaining;
     }
 
     async function deleteTestConfirm() {
