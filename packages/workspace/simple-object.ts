@@ -1,4 +1,4 @@
-type SimpleValue = string | number | boolean | null | SimpleObject;
+type SimpleValue = string | number | boolean | null | SimpleObject | SimpleValue[];
 
 export type SimpleObject = {
   [key: string]: SimpleValue;
@@ -141,6 +141,7 @@ class SimpleObjectParser {
     const char = this.peek();
     if (char === '"' || char === "'") return this.parseString();
     if (char === "{") return this.parseObject();
+    if (char === "[") return this.parseArray();
 
     const remaining = this.source.slice(this.index);
     const literal = /^(true|false|null)\b/.exec(remaining);
@@ -158,6 +159,26 @@ class SimpleObjectParser {
     }
 
     throw new Error(`Expected simple value at offset ${this.index}`);
+  }
+
+  private parseArray(): SimpleValue[] {
+    const values: SimpleValue[] = [];
+    this.expect("[");
+    this.skipWhitespace();
+
+    while (this.peek() !== "]") {
+      values.push(this.parseValue());
+      this.skipWhitespace();
+      if (this.peek() === ",") {
+        this.index += 1;
+        this.skipWhitespace();
+        continue;
+      }
+      break;
+    }
+
+    this.expect("]");
+    return values;
   }
 
   private parseString(): string {

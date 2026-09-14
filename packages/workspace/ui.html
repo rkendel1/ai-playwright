@@ -727,6 +727,7 @@
             <!-- Multi-credential checkboxes populated by JavaScript -->
           </div>
           <small class="muted" style="display: block; margin-top: 8px;">Select one or more profiles. The test stores only vault references—not usernames or passwords.</small>
+          <button class="secondary-button" type="button" onclick="openVault()" style="margin-top: 10px;">Add or manage credentials</button>
         </div>
       </div>
 
@@ -823,6 +824,11 @@
             <div style="display: grid; gap: 8px;">
               <input id="record-test-name" type="text" placeholder="Test name" style="border: 1px solid #c9d7ea; border-radius: 8px; padding: 8px; background: #fbfdff; font-size: 12px;" />
               <textarea id="record-test-description" placeholder="What does this test do?" style="border: 1px solid #c9d7ea; border-radius: 8px; padding: 8px; background: #fbfdff; font-size: 12px; min-height: 60px; resize: vertical;"></textarea>
+              <div>
+                <div style="font-size:12px;font-weight:700;color:#274160;margin-bottom:6px;">Credentials used by this test</div>
+                <div id="record-test-secrets-list" style="display:grid;gap:6px;"></div>
+                <button class="secondary-button" type="button" onclick="openVault()" style="margin-top:8px;font-size:12px;">Add or manage credentials</button>
+              </div>
             </div>
           </div>
         </div>
@@ -972,6 +978,30 @@
         if (state.secrets.some((profile) => profile.id === selected)) providerSelect.value = selected;
       }
       syncMultiSecretSelectors();
+      syncRecordingSecretSelectors();
+    }
+
+    function credentialCheckboxes(profiles, selected, onChange) {
+      if (!profiles.length) return '<small style="color:#5d7694;">No saved website logins. Add one in the Secrets Vault.</small>';
+      return profiles.map((profile) => `
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;">
+          <input type="checkbox" value="${escapeHtml(profile.id)}" ${selected.includes(profile.id) ? 'checked' : ''} onchange="${onChange}" />
+          <span>${escapeHtml(profile.name)}</span>
+        </label>
+      `).join('');
+    }
+
+    function syncRecordingSecretSelectors() {
+      const list = document.getElementById('record-test-secrets-list');
+      if (!list) return;
+      const credentials = state.secrets.filter((profile) => profile.kind === 'credentials');
+      list.innerHTML = credentialCheckboxes(credentials, window.recordSecretProfileIds || [], 'updateRecordingSecrets()');
+    }
+
+    function updateRecordingSecrets() {
+      window.recordSecretProfileIds = Array.from(document.querySelectorAll('#record-test-secrets-list input[type="checkbox"]'))
+        .filter((checkbox) => checkbox.checked)
+        .map((checkbox) => checkbox.value);
     }
 
     function syncMultiSecretSelectors() {
@@ -1581,6 +1611,8 @@
       }
 
       const failure = test.failure;
+      const credentialIds = test.secretProfileIds || (test.secretProfileId ? [test.secretProfileId] : []);
+      const credentialNames = credentialIds.map((id) => state.secrets.find((profile) => profile.id === id)?.name || id);
       document.getElementById('result-content').innerHTML = `
         <div class="split-header">
           <div>
@@ -1603,6 +1635,7 @@
             <div class="info-card wide"><span class="info-label">URL</span><div class="info-value"><code>${escapeHtml(test.url || '(default workspace URL)')}</code></div></div>
             <div class="info-card"><span class="info-label">Planner</span><div class="info-value">${plannerLabel(test.planner)}</div></div>
             <div class="info-card"><span class="info-label">Browser</span><div class="info-value">${browserLabel(test.browser)}</div></div>
+            <div class="info-card wide"><span class="info-label">Credentials</span><div class="info-value">${credentialNames.length ? credentialNames.map(escapeHtml).join(', ') : 'No credential profile selected'}</div></div>
           </div>
         </div>
 
@@ -2015,6 +2048,7 @@
       document.getElementById('adv-test-task').value = '';
       window.selectedSecretProfileIds = [];
       window.advancedSecretProfileIds = [];
+      document.getElementById('test-submit-btn').textContent = 'Create';
       switchTestMode('describe');
       syncSecretSelectors();
       syncAdvancedSecretSelectors();
@@ -2025,6 +2059,7 @@
     function openEditTestForm() {
       const test = selectedTest();
       if (!test) return;
+      switchTestMode('describe');
       state.editTestId = test.id;
       document.getElementById('new-test-mode').textContent = 'Edit Test';
       document.getElementById('new-test-title').textContent = test.name;
@@ -2033,8 +2068,8 @@
       document.getElementById('new-test-url').value = test.url || '';
       document.getElementById('new-test-task').value = test.task;
       window.selectedSecretProfileIds = test.secretProfileIds || (test.secretProfileId ? [test.secretProfileId] : []);
+      document.getElementById('test-submit-btn').textContent = 'Save changes';
       syncSecretSelectors();
-      document.getElementById('flow-preview').style.display = 'none';
       document.getElementById('new-test-modal').classList.remove('hidden');
       document.getElementById('new-test-name').focus();
     }
@@ -2237,8 +2272,10 @@
         actions: [],
         isRecording: false,
       };
+      window.recordSecretProfileIds = [...(window.selectedSecretProfileIds || [])];
       document.getElementById('record-test-url').value = recordingSession.url;
       document.getElementById('record-test-name').value = recordingSession.name;
+      syncRecordingSecretSelectors();
       document.getElementById('record-test-modal').classList.remove('hidden');
     }
 
@@ -2405,6 +2442,7 @@
             name,
             task: description,
             url: url || undefined,
+            secretProfileIds: (window.recordSecretProfileIds || []).length ? window.recordSecretProfileIds : undefined,
           }),
         });
         const payload = await readResponseBody(response);

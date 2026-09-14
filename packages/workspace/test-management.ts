@@ -9,7 +9,12 @@ import { parseExportDefaultObject } from "./simple-object.js";
  */
 
 function escapeString(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return s
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t");
 }
 
 export function createTest(
@@ -78,9 +83,11 @@ export function updateTest(
   }
 
   // Merge updates
-  const secretProfileIds = Object.prototype.hasOwnProperty.call(updates, "secretProfileIds")
+  const secretProfileIds: string[] | undefined = Object.prototype.hasOwnProperty.call(updates, "secretProfileIds")
     ? (Array.isArray(updates.secretProfileIds) ? updates.secretProfileIds : undefined)
-    : (Array.isArray(current.secretProfileIds) ? current.secretProfileIds : undefined);
+    : (Array.isArray(current.secretProfileIds)
+        ? current.secretProfileIds.filter((id): id is string => typeof id === "string")
+        : undefined);
 
   const secretProfileId = Object.prototype.hasOwnProperty.call(updates, "secretProfileId")
     ? (typeof updates.secretProfileId === "string" ? updates.secretProfileId : undefined)
@@ -97,14 +104,14 @@ export function updateTest(
 
   // Write updated file
   const secretProfilesLine = updated.secretProfileIds && updated.secretProfileIds.length > 0
-    ? `\n  secretProfileIds: [${updated.secretProfileIds.map(id => `"${id.replace(/"/g, '\\"')}"`).join(", ")}],`
-    : (updated.secretProfileId ? `\n  secretProfileId: "${updated.secretProfileId.replace(/"/g, '\\"')}",` : "");
+    ? `\n  secretProfileIds: [${updated.secretProfileIds.map(id => `"${escapeString(id)}"`).join(", ")}],`
+    : (updated.secretProfileId ? `\n  secretProfileId: "${escapeString(updated.secretProfileId)}",` : "");
 
   const newContent = `export default {
-  id: "${updated.id}",
-  name: "${updated.name.replace(/"/g, '\\"')}",
-  task: "${updated.task.replace(/"/g, '\\"')}",${
-    updated.url ? `\n  url: "${updated.url.replace(/"/g, '\\"')}",` : ""
+  id: "${escapeString(updated.id)}",
+  name: "${escapeString(updated.name)}",
+  task: "${escapeString(updated.task)}",${
+    updated.url ? `\n  url: "${escapeString(updated.url)}",` : ""
   }${secretProfilesLine}
 };
 `;
@@ -143,7 +150,9 @@ export function getTest(
       name: typeof def.name === "string" ? def.name : testId,
       task: typeof def.task === "string" ? def.task : "",
       url: typeof def.url === "string" ? def.url : undefined,
-      secretProfileIds: Array.isArray(def.secretProfileIds) ? def.secretProfileIds : undefined,
+      secretProfileIds: Array.isArray(def.secretProfileIds)
+        ? def.secretProfileIds.filter((id): id is string => typeof id === "string")
+        : undefined,
       secretProfileId: typeof def.secretProfileId === "string" ? def.secretProfileId : undefined,
     };
   } catch {

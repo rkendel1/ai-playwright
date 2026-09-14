@@ -453,4 +453,45 @@ describe("workspace UI", () => {
     expect(summaries).not.toContain("admin@example.test");
     expect(summaries).not.toContain("do-not-write-this");
   });
+
+  it("edits a recorded test and attaches a saved credential profile", async () => {
+    uiServer = await startUIServer(workspaceDir, 0);
+    const baseUrl = serverBaseUrl(uiServer);
+    const secretResponse = await fetch(`${baseUrl}/api/secrets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Recorded account",
+        kind: "credentials",
+        values: { username: "recorded@example.test", password: "never-in-the-test" },
+      }),
+    });
+    expect(secretResponse.status).toBe(201);
+
+    const createResponse = await fetch(`${baseUrl}/api/tests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Recorded login",
+        url: "http://localhost:32100",
+        task: "Enter the saved username or email\nEnter the saved password\nClick Sign in",
+      }),
+    });
+    expect(createResponse.status).toBe(201);
+
+    await page!.goto(baseUrl);
+    await testCard(page!, "Recorded login").click({ timeout: 3000 });
+    await page!.getByRole("button", { name: "Edit", exact: true }).click({ timeout: 3000 });
+
+    const dialog = page!.getByRole("dialog", { name: "Recorded login" });
+    await dialog.getByRole("checkbox", { name: /Recorded account/ }).check({ timeout: 3000 });
+    await dialog.getByRole("button", { name: "Save changes" }).click({ timeout: 3000 });
+
+    const source = await fs.readFile(path.join(workspaceDir, "tests", "recorded-login.test.ts"), "utf8");
+    expect(source).toContain("secretProfileIds");
+    expect(source).not.toContain("recorded@example.test");
+    expect(source).not.toContain("never-in-the-test");
+    expect(source).toContain("\\n");
+    await page!.locator("#result-content").getByText("Recorded account", { exact: true }).waitFor({ timeout: 3000 });
+  });
 });

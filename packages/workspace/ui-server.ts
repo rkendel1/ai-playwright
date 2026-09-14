@@ -72,9 +72,9 @@ function recordedTestDescription(actions: RecordedAction[]): string {
     if (action.type === "navigate" && action.value) return [`Navigate to ${action.value}`];
     if (action.type === "click") return [`Click "${target}"`];
     if (action.type === "fill") {
-      return action.value === "{{password}}"
-        ? [`Enter the saved password in "${target}"`]
-        : [`Enter "${action.value || ""}" in "${target}"`];
+      if (action.value === "{{password}}") return [`Enter the saved password in "${target}"`];
+      if (action.value === "{{username}}") return [`Enter the saved username or email in "${target}"`];
+      return [`Enter "${action.value || ""}" in "${target}"`];
     }
     if (action.type === "scroll") return [`Scroll ${action.value || "down"}`];
     return [];
@@ -121,9 +121,18 @@ async function attachPageRecorder(session: RecordingSession): Promise<void> {
     document.addEventListener("change", (event) => {
       if (!(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement)) return;
       const input = event.target;
-      const sensitive = input instanceof HTMLInputElement
-        && (input.type === "password" || /password/i.test(input.autocomplete));
-      send({ type: "fill", target: describe(input), value: sensitive ? "{{password}}" : input.value });
+      const hint = [describe(input), input.name, input.id, input.autocomplete, input instanceof HTMLInputElement ? input.type : ""]
+        .filter(Boolean)
+        .join(" ");
+      const password = input instanceof HTMLInputElement
+        && (input.type === "password" || /password/i.test(hint));
+      const username = input instanceof HTMLInputElement
+        && (input.type === "email" || /user.?name|e-?mail|login/i.test(hint));
+      send({
+        type: "fill",
+        target: describe(input),
+        value: password ? "{{password}}" : username ? "{{username}}" : input.value,
+      });
     }, true);
 
     let scrollTimer: number | undefined;
