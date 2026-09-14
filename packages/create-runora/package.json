@@ -1,6 +1,6 @@
 {
   "name": "create-runora",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Create a Runora browser testing project.",
   "type": "module",
   "bin": {

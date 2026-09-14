@@ -1,6 +1,6 @@
 {
   "name": "runora",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "Runora is an evidence-first browser testing platform that uses AI to understand what should be tested while Playwright executes and proves what actually happened.",
   "main": "dist/packages/core/index.js",
   "scripts": {
