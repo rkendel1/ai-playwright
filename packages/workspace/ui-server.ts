@@ -294,7 +294,7 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
 
     // API: Get single run evidence file
     if (pathname && pathname.startsWith("/api/runs/") && req.method === "GET") {
-      const evidenceMatch = pathname.match(/^\/api\/runs\/([^/]+)\/evidence\/([^/]+)$/);
+      const evidenceMatch = pathname.match(/^\/api\/runs\/([^/]+)\/evidence\/(.+)$/);
       if (evidenceMatch) {
         try {
           const runId = evidenceMatch[1];

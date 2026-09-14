@@ -1035,7 +1035,9 @@
     function renderSuiteRuns() {
       const list = document.getElementById('suite-runs-list');
       const summary = document.getElementById('suite-runs-summary');
-      summary.textContent = suiteRunsSummary();
+      if (summary) {
+        summary.textContent = suiteRunsSummary();
+      }
       if (state.suiteRuns.length === 0) {
         list.innerHTML = `
           <div class="empty-state">
