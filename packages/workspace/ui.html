@@ -555,6 +555,16 @@
       min-height: 110px;
       resize: vertical;
     }
+    .test-mode-tab {
+      transition: all 0.2s ease;
+    }
+    .test-mode-tab:hover {
+      color: #2347b1 !important;
+    }
+    .test-mode-tab.active {
+      color: #2347b1 !important;
+      border-bottom-color: #2347b1 !important;
+    }
     .modal-actions,
     .detail-actions {
       display: flex;
@@ -689,7 +699,16 @@
           <p class="muted" id="new-test-description">Create a new Runora workspace test.</p>
         </div>
       </div>
-      <div class="form-grid">
+
+      <!-- Mode Tabs -->
+      <div style="display: flex; gap: 8px; margin: 16px 0; border-bottom: 1px solid #dce6f5; padding-bottom: 12px;">
+        <button class="test-mode-tab active" id="mode-describe-tab" onclick="switchTestMode('describe')" style="padding: 8px 12px; border: none; background: none; cursor: pointer; font-weight: 600; color: #2347b1; border-bottom: 3px solid #2347b1; margin-bottom: -15px;">Describe</button>
+        <button class="test-mode-tab" id="mode-record-tab" onclick="switchTestMode('record')" style="padding: 8px 12px; border: none; background: none; cursor: pointer; font-weight: 600; color: #5d7694;">Record</button>
+        <button class="test-mode-tab" id="mode-advanced-tab" onclick="switchTestMode('advanced')" style="padding: 8px 12px; border: none; background: none; cursor: pointer; font-weight: 600; color: #5d7694;">Advanced</button>
+      </div>
+
+      <!-- Describe Mode -->
+      <div id="describe-mode-content" class="form-grid">
         <div class="form-field">
           <label for="new-test-name">Name</label>
           <input id="new-test-name" type="text" autocomplete="off" />
@@ -710,10 +729,43 @@
           <small class="muted" style="display: block; margin-top: 8px;">Select one or more profiles. The test stores only vault references—not usernames or passwords.</small>
         </div>
       </div>
+
+      <!-- Advanced Mode -->
+      <div id="advanced-mode-content" class="form-grid" style="display: none;">
+        <div class="form-field">
+          <label for="adv-test-name">Name</label>
+          <input id="adv-test-name" type="text" autocomplete="off" />
+        </div>
+        <div class="form-field">
+          <label for="adv-test-url">URL</label>
+          <input id="adv-test-url" type="url" autocomplete="off" placeholder="http://localhost:3000" />
+        </div>
+        <div class="form-field">
+          <label for="adv-test-task">Test Steps (detailed)</label>
+          <textarea id="adv-test-task" placeholder="Click &quot;Have a password? Sign in here.&quot;&#10;Enter demo account credentials and click Sign In&#10;Wait for /ideas to load&#10;Click Add Idea in upper right corner&#10;Select the tab &quot;Bring Your Own Idea&quot;&#10;Enter idea details&#10;in the I'm developing enter: &quot;Packaging for developers&quot;&#10;Click &quot;Add and Analyze Idea&quot;"></textarea>
+          <small class="muted" style="display: block; margin-top: 8px;">Write one step per line. Steps are automatically parsed into: click, fill, wait, navigate, pause, screenshot, assert, select.</small>
+        </div>
+        <div class="form-field" style="margin-bottom: 12px;">
+          <details style="border-top: 1px solid #dce6f5; padding-top: 12px;">
+            <summary style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: #274160; user-select: none; padding-bottom: 12px;">
+              <span>Step Preview</span>
+              <button class="secondary-button" type="button" onclick="event.stopPropagation(); previewAdvancedSteps()" style="font-size: 12px; padding: 6px 10px; margin: 0;">Preview Steps</button>
+            </summary>
+            <div id="advanced-flow-preview" class="step-list" style="display: grid; max-height: 300px; overflow-y: auto; gap: 8px;"></div>
+          </details>
+        </div>
+        <div class="form-field">
+          <label>Credential profiles (optional)</label>
+          <div id="adv-test-secrets-list" style="display: grid; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #dce6f5;">
+            <!-- Multi-credential checkboxes populated by JavaScript -->
+          </div>
+          <small class="muted" style="display: block; margin-top: 8px;">Select one or more profiles. The test stores only vault references—not usernames or passwords.</small>
+        </div>
+      </div>
+
       <div class="modal-actions">
         <button class="ghost-button" type="button" onclick="closeNewTestForm()">Cancel</button>
-        <button class="secondary-button" type="button" onclick="switchToRecordMode()" style="margin-right: auto;">Record Instead</button>
-        <button class="primary-button" type="button" onclick="submitNewTestForm()">Create</button>
+        <button class="primary-button" type="button" onclick="submitTestForm()" id="test-submit-btn">Create</button>
       </div>
     </div>
   </div>
@@ -1939,6 +1991,8 @@
       render();
     }
 
+    let currentTestMode = 'describe';
+
     function openNewTestForm() {
       state.editTestId = null;
       document.getElementById('new-test-mode').textContent = 'Create Test';
@@ -1947,9 +2001,14 @@
       document.getElementById('new-test-name').value = '';
       document.getElementById('new-test-url').value = 'http://localhost:3000';
       document.getElementById('new-test-task').value = '';
+      document.getElementById('adv-test-name').value = '';
+      document.getElementById('adv-test-url').value = 'http://localhost:3000';
+      document.getElementById('adv-test-task').value = '';
       window.selectedSecretProfileIds = [];
+      window.advancedSecretProfileIds = [];
+      switchTestMode('describe');
       syncSecretSelectors();
-      document.getElementById('flow-preview').style.display = 'none';
+      syncAdvancedSecretSelectors();
       document.getElementById('new-test-modal').classList.remove('hidden');
       document.getElementById('new-test-name').focus();
     }
@@ -1976,7 +2035,111 @@
       state.editTestId = null;
     }
 
-    async function submitNewTestForm() {
+    function switchTestMode(mode) {
+      currentTestMode = mode;
+
+      // Update tab active states
+      document.querySelectorAll('.test-mode-tab').forEach(tab => tab.classList.remove('active'));
+      document.getElementById('mode-' + mode + '-tab').classList.add('active');
+      document.getElementById('mode-' + mode + '-tab').style.color = '#2347b1';
+      document.getElementById('mode-' + mode + '-tab').style.borderBottomColor = '#2347b1';
+
+      // Hide other tabs
+      document.querySelectorAll('.test-mode-tab').forEach(tab => {
+        if (tab.id !== 'mode-' + mode + '-tab') {
+          tab.style.color = '#5d7694';
+          tab.style.borderBottomColor = 'transparent';
+        }
+      });
+
+      // Show/hide content
+      document.getElementById('describe-mode-content').style.display = mode === 'describe' ? 'grid' : 'none';
+      document.getElementById('advanced-mode-content').style.display = mode === 'advanced' ? 'grid' : 'none';
+
+      // Sync secrets for current mode
+      if (mode === 'describe') {
+        syncSecretSelectors();
+      } else if (mode === 'advanced') {
+        syncAdvancedSecretSelectors();
+      }
+    }
+
+    function syncAdvancedSecretSelectors() {
+      const list = document.getElementById('adv-test-secrets-list');
+      if (!list || !state.secrets) return;
+
+      window.advancedSecretProfileIds = window.advancedSecretProfileIds || [];
+
+      list.innerHTML = state.secrets.map(profile => `
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px; border-radius: 6px; hover:background: #f5f8fc;">
+          <input type="checkbox" ${window.advancedSecretProfileIds.includes(profile.id) ? 'checked' : ''} onchange="updateAdvancedSecrets('${escapeHtml(profile.id)}', this.checked)" />
+          <div style="flex: 1;">
+            <div style="font-size: 13px; font-weight: 600; color: #274160;">${escapeHtml(profile.name)}</div>
+            <div style="font-size: 11px; color: #5d7694;">${escapeHtml(profile.kind)}</div>
+          </div>
+        </label>
+      `).join('');
+    }
+
+    function updateAdvancedSecrets(id, checked) {
+      window.advancedSecretProfileIds = window.advancedSecretProfileIds || [];
+      if (checked) {
+        if (!window.advancedSecretProfileIds.includes(id)) {
+          window.advancedSecretProfileIds.push(id);
+        }
+      } else {
+        window.advancedSecretProfileIds = window.advancedSecretProfileIds.filter(x => x !== id);
+      }
+    }
+
+    function previewAdvancedSteps() {
+      const taskValue = document.getElementById('adv-test-task').value;
+      const steps = parseFlowSteps(taskValue);
+      const preview = document.getElementById('advanced-flow-preview');
+      const detailsElement = preview.closest('details');
+
+      if (!steps.length) {
+        preview.style.display = 'none';
+        return;
+      }
+
+      const typeColors = {
+        click: '#2347b1', fill: '#20744a', wait: '#9c6a00', navigate: '#0b3e8f',
+        pause: '#9c6a00', screenshot: '#8b5c00', assert: '#2347b1', select: '#5b7f8f', natural: '#5d7694'
+      };
+
+      const typeIcons = {
+        click: '🖱️', fill: '✏️', wait: '⏳', navigate: '🔗', pause: '⏸',
+        screenshot: '📸', assert: '✓', select: '▼', natural: '🤖'
+      };
+
+      preview.innerHTML = steps.map((step) => `
+        <div class="step-button" style="border-color: ${typeColors[step.type]};">
+          <div class="status-row">
+            <div class="card-title">${typeIcons[step.type]} Step ${step.index}: ${step.type.charAt(0).toUpperCase() + step.type.slice(1)}</div>
+            <span class="status-pill" style="background: #eef4ff; color: #2347b1; font-size: 11px;">${step.type.toUpperCase()}</span>
+          </div>
+          <div class="card-meta" style="color: #10233f; font-size: 13px; font-weight: 500;">
+            <div>${escapeHtml(step.label)}</div>
+          </div>
+        </div>
+      `).join('');
+
+      preview.style.display = 'grid';
+      if (detailsElement) {
+        detailsElement.open = true;
+      }
+    }
+
+    async function submitTestForm() {
+      if (currentTestMode === 'describe') {
+        return submitDescribeMode();
+      } else if (currentTestMode === 'advanced') {
+        return submitAdvancedMode();
+      }
+    }
+
+    async function submitDescribeMode() {
       const name = document.getElementById('new-test-name').value.trim();
       const url = document.getElementById('new-test-url').value.trim();
       const task = document.getElementById('new-test-task').value.trim();
@@ -1995,9 +2158,44 @@
           method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            name,
-            task,
-            url: url || undefined,
+            name, task, url: url || undefined,
+            secretProfileIds: secretProfileIds.length > 0 ? secretProfileIds : undefined,
+            secretProfileId: undefined
+          }),
+        });
+        const payload = await readResponseBody(response);
+        if (!response.ok) {
+          alert('Error saving test: ' + (payload.error || response.statusText));
+          return;
+        }
+        closeNewTestForm();
+        await refresh();
+        setSelectedTest(payload.id || testId);
+      } catch (error) {
+        alert('Error saving test: ' + error);
+      }
+    }
+
+    async function submitAdvancedMode() {
+      const name = document.getElementById('adv-test-name').value.trim();
+      const url = document.getElementById('adv-test-url').value.trim();
+      const task = document.getElementById('adv-test-task').value.trim();
+      const secretProfileIds = window.advancedSecretProfileIds || [];
+      if (!name || !task) {
+        alert('Name and test steps are required.');
+        return;
+      }
+
+      const testId = state.editTestId;
+      const endpoint = testId ? '/api/tests/' + testId : '/api/tests';
+      const method = testId ? 'PUT' : 'POST';
+
+      try {
+        const response = await fetch(endpoint, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name, task, url: url || undefined,
             secretProfileIds: secretProfileIds.length > 0 ? secretProfileIds : undefined,
             secretProfileId: undefined
           }),
