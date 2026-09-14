@@ -12,6 +12,7 @@ import {
   type BrowserResponse,
   type TaskResult,
 } from "../../../packages/core/src/index.js";
+import * as webllm from "@mlc-ai/web-llm";
 
 // ============================================================================
 // Capability Tracking
@@ -114,7 +115,7 @@ function renderConclusion(result: "PASS" | "BLOCKED" | "FAIL") {
   } else if (result === "BLOCKED") {
     conclusionEl.innerHTML = `
       <strong>BROWSER_LOCAL_BLOCKED</strong><br>
-      Kernel and inference work in-browser, but execution boundary not available.
+      One or more browser-local capabilities are unavailable.
       <br><br>
       See capability report for specific blocker.
     `;
@@ -433,21 +434,30 @@ async function runBrowserExperiment() {
       evidence: "Kernel imports work",
     };
 
-    // 2. Try WebLLM (this will likely be blocked in browser without proper setup)
+    // 2. Verify that the bundled WebLLM module has an actual WebGPU adapter.
     addTraceItem(1, "WebLLM", "Checking if available...", "pass");
     let webllmAvailable = false;
-    let webllmEvidence = "WebLLM not available in browser environment";
+    let webllmEvidence = "WebLLM or WebGPU is unavailable";
 
     try {
-      // Check if we can access WebLLM
-      const hasWebLLM = typeof (window as any).mlc !== "undefined";
-      if (hasWebLLM) {
-        webllmAvailable = true;
-        webllmEvidence = "WebLLM/WebGPU initialized";
-      } else {
-        webllmEvidence =
-          "BLOCKED: WebLLM not loaded. Requires @mlc-ai/web-llm module in browser.";
+      if (typeof webllm.CreateMLCEngine !== "function") {
+        throw new Error("The @mlc-ai/web-llm module did not expose CreateMLCEngine");
       }
+
+      const gpu = (navigator as Navigator & {
+        gpu?: { requestAdapter(): Promise<unknown | null> };
+      }).gpu;
+      if (!gpu) {
+        throw new Error("WebGPU is not exposed by this browser");
+      }
+
+      const adapter = await gpu.requestAdapter();
+      if (!adapter) {
+        throw new Error("WebGPU could not acquire a compatible GPU adapter");
+      }
+
+      webllmAvailable = true;
+      webllmEvidence = "@mlc-ai/web-llm bundled; WebGPU adapter acquired";
     } catch (e) {
       webllmEvidence = `BLOCKED: ${
         e instanceof Error ? e.message : String(e)

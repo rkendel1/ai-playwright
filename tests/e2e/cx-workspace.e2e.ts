@@ -103,7 +103,7 @@ describe("CX workspace acceptance", () => {
     workspaceDir = await tempDir("cx-workspace");
 
     app = await startCXApp({ port: updateScreenshots ? 3000 : undefined });
-    const initResult = await runCLI(["init"], workspaceDir);
+    const initResult = await runCLI(["init", "--no-ui", "--skip-browser-install"], workspaceDir);
     expect(initResult.code).toBe(0);
     expect(initResult.stdout).toContain("Runora workspace initialized");
 

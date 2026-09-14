@@ -81,6 +81,12 @@ function ensureWebLLMRuntimeGlobals() {
 }
 
 async function createDefaultEngine(model: string): Promise<MLCEngineInterface> {
+  const browserNavigator = globalThis.navigator as Navigator & { gpu?: unknown };
+  if (typeof window === "undefined" || !browserNavigator?.gpu) {
+    throw new Error(
+      "WebLLM requires the browser workspace. Run `npx runora init`, open its UI, and choose Intelligent (WebLLM).",
+    );
+  }
   ensureWebLLMRuntimeGlobals();
   return CreateMLCEngine(model);
 }

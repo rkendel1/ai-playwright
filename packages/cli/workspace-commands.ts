@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import type http from "node:http";
 import path from "node:path";
 import {
   resolveConfig,
@@ -44,19 +45,20 @@ export async function initWorkspace(workspaceDir: string): Promise<void> {
 
 export async function runTestCommand(
   testName?: string,
-  options?: { url?: string; workspaceDir?: string; planner?: PlannerMode; model?: ModelConfig }
+  options?: { url?: string; workspaceDir?: string; planner?: PlannerMode; model?: ModelConfig; headless?: boolean }
 ): Promise<void> {
   const workspaceDir = options?.workspaceDir || process.cwd();
   const config = await resolveConfig(workspaceDir, {
     url: options?.url,
     planner: options?.planner,
     model: options?.model,
+    headless: options?.headless,
   });
 
   console.log("\nRunora");
   console.log(`Workspace: ${workspaceDir}`);
   console.log(`Config: ${config.url || "default"}\n`);
-  console.log(`Planner: ${config.planner === "webllm" ? "WebLLM" : "Deterministic"}`);
+  console.log(`Planner: ${config.planner}`);
   if (config.planner === "webllm") {
     console.log(`Model: ${typeof config.model === "object" ? config.model.model : process.env.AIPW_WEBLLM_MODEL ?? "(default)"}`);
   }
@@ -160,7 +162,11 @@ export async function listTestsCommand(workspaceDir?: string): Promise<void> {
   }
 }
 
-export async function startUICommand(workspaceDir?: string, port: number = 3001): Promise<void> {
+export async function startUICommand(
+  workspaceDir?: string,
+  port: number = 3001,
+  announce = true,
+): Promise<http.Server> {
   const dir = workspaceDir || process.cwd();
-  await startUIServer(dir, port);
+  return startUIServer(dir, port, { announce });
 }

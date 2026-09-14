@@ -337,6 +337,10 @@
       border-color: #f1c0c0;
       background: #fff7f7;
     }
+    .timeline-card.blocked {
+      border-color: #ecd28b;
+      background: #fffaf0;
+    }
     .timeline-status {
       margin-top: 10px;
       font-size: 12px;
@@ -585,7 +589,7 @@
         <p class="subtitle">Describe what you want tested. Runora plans the browser actions, executes them against a real browser, and preserves evidence when something goes wrong.</p>
       </div>
       <div class="runtime-truth">
-        <div><span>Planner</span><strong>WebLLM / Deterministic</strong></div>
+        <div><span>Planner</span><strong>WebLLM / Ollama / OpenAI / Claude</strong></div>
         <div><span>Execution</span><strong>Playwright</strong></div>
         <div><span>Browser</span><strong>Obscura</strong></div>
         <div><span>Semantic control</span><strong>aipw-core</strong></div>
@@ -604,6 +608,48 @@
         </div>
         <div id="tests-list" class="tests-list"></div>
         <div class="section">
+          <label style="display: grid; gap: 6px; margin-bottom: 12px;">
+            <span>Planner</span>
+            <select id="planner-mode" onchange="syncProviderFields()">
+              <option value="webllm">Intelligent (WebLLM)</option>
+              <option value="ollama">Local (Ollama)</option>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="deterministic">Deterministic (limited)</option>
+            </select>
+            <small id="model-status" class="muted">Preparing intelligent planner…</small>
+          </label>
+          <div id="provider-settings" style="display: none; gap: 10px; margin-bottom: 12px;">
+            <label id="cloud-model-field" style="display: grid; gap: 6px;">
+              <span>Model</span>
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px;">
+                <select id="provider-model"><option value="">Enter an API key to load models</option></select>
+                <button class="secondary-button" type="button" onclick="loadProviderModels()">Refresh</button>
+              </div>
+              <small id="cloud-model-status" class="muted">Models are loaded from your provider account.</small>
+            </label>
+            <div id="ollama-model-field" style="display: none; gap: 6px;">
+              <label for="ollama-model">Installed Ollama model</label>
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px;">
+                <select id="ollama-model"><option value="">Discovering installed models…</option></select>
+                <button class="secondary-button" type="button" onclick="loadOllamaModels()">Refresh</button>
+              </div>
+              <small id="ollama-model-status" class="muted">Checking the local Ollama service…</small>
+            </div>
+            <label style="display: grid; gap: 6px;">
+              <span>Endpoint (optional)</span>
+              <input id="provider-base-url" type="url" autocomplete="off" placeholder="Provider default" onchange="document.getElementById('planner-mode').value === 'ollama' ? loadOllamaModels() : loadProviderModels()" />
+            </label>
+            <label id="provider-key-field" style="display: grid; gap: 6px;">
+              <span>API key</span>
+              <input id="provider-api-key" type="password" autocomplete="off" placeholder="Or use provider environment variable" onchange="loadProviderModels()" />
+            </label>
+            <small class="muted">Credentials remain only in this local Runora process and are never written to tests or evidence.</small>
+          </div>
+          <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+            <input id="headed-mode" type="checkbox" />
+            <span>Show browser while tests run</span>
+          </label>
           <button id="run-all-button" class="primary-button full-width" type="button" onclick="runSuite()">Run All Tests</button>
         </div>
         <div class="section">
@@ -639,7 +685,7 @@
         </div>
         <div class="form-field">
           <label for="new-test-url">URL</label>
-          <input id="new-test-url" type="url" autocomplete="off" placeholder="http://127.0.0.1:3000" />
+          <input id="new-test-url" type="url" autocomplete="off" placeholder="http://localhost:3000" />
         </div>
         <div class="form-field">
           <label for="new-test-task">Task</label>
@@ -709,7 +755,8 @@
     }
 
     function plannerLabel(planner) {
-      return planner === 'webllm' ? 'WebLLM' : planner === 'mock' ? 'Mock' : 'Deterministic';
+      const labels = { webllm: 'WebLLM', 'browser-webllm': 'WebLLM', ollama: 'Ollama', openai: 'OpenAI', anthropic: 'Claude', mock: 'Mock', deterministic: 'Deterministic' };
+      return labels[planner] || String(planner || 'Deterministic');
     }
 
     function browserLabel(browser) {
@@ -798,6 +845,12 @@
       return action.description || titleCase(action.type || 'observe');
     }
 
+    function stepStatus(step) {
+      if (step?.action?.type === 'blocked') return 'blocked';
+      if (step?.result?.status === 'failure' || step?.validation?.status === 'failure') return 'failed';
+      return 'passed';
+    }
+
     function errorSummary(run, step) {
       const element = observationElement(step);
       const rawError = step?.result?.error || run?.failure?.message;
@@ -809,6 +862,10 @@
         return 'Element "' + element.name + '" was not found';
       }
       return rawError;
+    }
+
+    function copyButton(value, label = 'Copy') {
+      return `<button class="secondary-button" type="button" data-copy="${escapeHtml(value)}" onclick="copyText(this.dataset.copy)">${escapeHtml(label)}</button>`;
     }
 
     function interactiveElements(observation) {
@@ -855,6 +912,7 @@
           <div class="kicker">
             <span class="observation-chip">${escapeHtml(observationSummary(step))}</span>
           </div>
+          <div class="evidence-actions">${copyButton(JSON.stringify(observation, null, 2), 'Copy observation')}</div>
           <details id="step-observation-details" class="detail-toggle">
             <summary><span class="toggle-label" data-open-label="Hide details (expanded)" data-closed-label="View details (collapsed)">View details (collapsed)</span></summary>
             <ul class="detail-list">
@@ -886,6 +944,7 @@
             <div class="small-text">A screenshot was not available for this failure. The trace and evidence directory may still help explain what happened.</div>
             <div class="kicker mono">${escapeHtml(manifest.directory || run?.evidence || '(no evidence path recorded)')}</div>
             <div class="evidence-actions">
+              ${copyButton(manifest.directory || run?.evidence || '', 'Copy evidence path')}
               ${trace ? `<a class="secondary-button inline-link" href="${trace.url}" target="_blank" rel="noopener noreferrer">View trace</a>` : ''}
             </div>
           </div>
@@ -909,6 +968,7 @@
             </div>
           </details>
           <div class="evidence-actions">
+            <button class="secondary-button" type="button" onclick="copyScreenshot('${screenshot.url}')">Copy screenshot</button>
             <a class="secondary-button inline-link" href="${screenshot.url}" target="_blank" rel="noopener noreferrer">Open screenshot</a>
             <a class="secondary-button inline-link" href="${screenshot.url}" download="${escapeHtml(screenshot.name)}">Download screenshot</a>
           </div>
@@ -951,6 +1011,27 @@
         showFeedback('Suggestion copied to clipboard.');
       } catch {
         showFeedback('Copy this suggestion manually:', decoded);
+      }
+    }
+
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(String(text || ''));
+        showFeedback('Copied to clipboard.');
+      } catch (error) {
+        showFeedback('Copy failed. Select the text and copy it manually.', String(error));
+      }
+    }
+
+    async function copyScreenshot(url) {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        if (!window.ClipboardItem || !navigator.clipboard?.write) throw new Error('Image clipboard is unavailable');
+        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+        showFeedback('Screenshot copied to clipboard.');
+      } catch (error) {
+        showFeedback('Image copy is unavailable in this browser. Use Download screenshot instead.', String(error));
       }
     }
 
@@ -1353,7 +1434,8 @@
     function renderTimeline(run, step) {
       const planner = step?.planner?.provider ? plannerLabel(step.planner.provider) : plannerLabel(run.planner);
       const validation = step?.validation?.status === 'failure' ? 'Failed' : 'Passed';
-      const execution = step?.result?.status === 'failure' ? 'Failed' : 'Passed';
+      const currentStepStatus = stepStatus(step);
+      const execution = statusLabel(currentStepStatus);
       const hasError = step?.result?.error || run?.failure?.message;
       return `
         <div class="timeline-grid">
@@ -1372,7 +1454,7 @@
             <div class="summary-value">${escapeHtml(validation)}</div>
             <div class="timeline-status">Planner: ${escapeHtml(planner)}</div>
           </div>
-          <div class="timeline-card ${step?.result?.status === 'failure' ? 'failed' : 'active'}">
+          <div class="timeline-card ${currentStepStatus === 'passed' ? 'active' : currentStepStatus}">
             <span class="summary-label">Execution</span>
             <div class="summary-value">${escapeHtml(execution)}</div>
             <div class="timeline-status">Browser: ${escapeHtml(browserLabel(run.browser))}</div>
@@ -1381,6 +1463,7 @@
             <span class="summary-label">Error</span>
             <div class="summary-value">${hasError ? escapeHtml(errorSummary(run, step)) : 'None'}</div>
             <div class="timeline-status">Evidence preserved</div>
+            ${hasError ? `<div class="evidence-actions">${copyButton(errorSummary(run, step), 'Copy error')}</div>` : ''}
           </div>
         </div>
       `;
@@ -1394,7 +1477,7 @@
       }
 
       const steps = Array.isArray(run.result?.steps) ? run.result.steps : [];
-      const failedIndex = steps.findIndex((step) => step.result?.status === 'failure' || step.validation?.status === 'failure');
+      const failedIndex = steps.findIndex((step) => stepStatus(step) !== 'passed');
       if (state.selectedStepIndex === null) {
         state.selectedStepIndex = failedIndex >= 0 ? failedIndex : Math.max(steps.length - 1, 0);
       }
@@ -1418,7 +1501,7 @@
           <div class="summary-card"><span class="summary-label">Planner</span><div class="summary-value">${plannerLabel(run.planner)}</div></div>
           <div class="summary-card"><span class="summary-label">Browser</span><div class="summary-value">${browserLabel(run.browser)}</div></div>
           <div class="summary-card"><span class="summary-label">Duration</span><div class="summary-value">${formatDuration(run.durationMs)}</div></div>
-          <div class="summary-card"><span class="summary-label">Evidence</span><div class="summary-value"><code>${escapeHtml(run.evidence || '(none)')}</code></div></div>
+          <div class="summary-card"><span class="summary-label">Evidence</span><div class="summary-value"><code>${escapeHtml(run.evidence || '(none)')}</code></div><div class="evidence-actions">${copyButton(run.evidence || '', 'Copy path')}</div></div>
         </div>
 
         <div class="section">
@@ -1432,8 +1515,8 @@
             ${steps.map((item, index) => `
               <button class="step-button ${index === state.selectedStepIndex ? 'active' : ''}" type="button" onclick="selectRunStep(${index})">
                 <div class="status-row">
-                  <div class="card-title">${statusIcon(item.result?.status === 'failure' || item.validation?.status === 'failure' ? 'failed' : 'passed')} Step ${item.index} — ${escapeHtml(stepTitle(item))}</div>
-                  <span class="status-pill ${item.result?.status === 'failure' || item.validation?.status === 'failure' ? 'failed' : 'passed'}">${item.result?.status === 'failure' || item.validation?.status === 'failure' ? 'failed' : 'passed'}</span>
+                  <div class="card-title">${statusIcon(stepStatus(item))} Step ${item.index} — ${escapeHtml(stepTitle(item))}</div>
+                  <span class="status-pill ${stepStatus(item)}">${statusLabel(stepStatus(item))}</span>
                 </div>
                 <div class="card-meta">
                   <div>${escapeHtml(stepAction(item))}</div>
@@ -1452,6 +1535,7 @@
               <div class="step-detail-card wide">
                 <span class="summary-label">Action</span>
                 <div class="summary-value">${escapeHtml(stepAction(step))}</div>
+                <div class="evidence-actions">${copyButton(JSON.stringify(step.action || {}, null, 2), 'Copy action')}</div>
               </div>
               <div class="arrow">↓</div>
               <div class="step-detail-card wide">
@@ -1462,13 +1546,14 @@
               <div class="arrow">↓</div>
               <div class="step-detail-card wide">
                 <span class="summary-label">Execution</span>
-                <div class="summary-value">${escapeHtml(step.result?.status || 'unknown')}</div>
-                <div class="small-text mono">${escapeHtml(step.result?.output || 'No additional output')}</div>
+                <div class="summary-value">${escapeHtml(statusLabel(stepStatus(step)))}</div>
+                <div class="small-text mono">${escapeHtml(step.action?.type === 'blocked' ? step.action.reason : step.result?.output || 'No additional output')}</div>
               </div>
               <div class="arrow">↓</div>
               <div class="step-detail-card wide">
                 <span class="summary-label">Error</span>
                 <div class="summary-value mono">${escapeHtml(errorSummary(run, step))}</div>
+                ${errorSummary(run, step) !== 'None' ? `<div class="evidence-actions">${copyButton(errorSummary(run, step), 'Copy error')}</div>` : ''}
               </div>
               ${visualEvidence ? '<div class="arrow">↓</div>' + visualEvidence : ''}
             </div>
@@ -1553,7 +1638,7 @@
       document.getElementById('new-test-title').textContent = 'New Test';
       document.getElementById('new-test-description').textContent = 'Create a new Runora workspace test.';
       document.getElementById('new-test-name').value = '';
-      document.getElementById('new-test-url').value = 'http://127.0.0.1:3000';
+      document.getElementById('new-test-url').value = 'http://localhost:3000';
       document.getElementById('new-test-task').value = '';
       document.getElementById('new-test-modal').classList.remove('hidden');
       document.getElementById('new-test-name').focus();
@@ -1698,22 +1783,158 @@
       }
     }
 
+    async function ensurePlannerReady() {
+      const provider = document.getElementById('planner-mode').value;
+      if (provider === 'deterministic') return true;
+      if (provider !== 'webllm') {
+        const model = provider === 'ollama'
+          ? document.getElementById('ollama-model').value
+          : document.getElementById('provider-model').value;
+        const baseUrl = document.getElementById('provider-base-url').value.trim();
+        const apiKey = document.getElementById('provider-api-key').value.trim();
+        try {
+          const response = await fetch('/api/planner/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider, model, baseUrl, apiKey }),
+          });
+          const payload = response.ok ? null : await readResponseBody(response);
+          if (!response.ok) throw new Error(payload?.error || response.statusText);
+          return true;
+        } catch (error) {
+          alert('Unable to configure planner: ' + error);
+          return false;
+        }
+      }
+      if (typeof window.runoraEnsureModel !== 'function') {
+        alert('The browser planner is still loading. Try again in a moment.');
+        return false;
+      }
+      try {
+        await window.runoraEnsureModel();
+        return true;
+      } catch (error) {
+        alert('Unable to load the browser-local model: ' + error);
+        return false;
+      }
+    }
+
+    function syncProviderFields() {
+      const provider = document.getElementById('planner-mode').value;
+      const settings = document.getElementById('provider-settings');
+      const keyField = document.getElementById('provider-key-field');
+      const endpoint = document.getElementById('provider-base-url');
+      const cloudModelField = document.getElementById('cloud-model-field');
+      const ollamaModelField = document.getElementById('ollama-model-field');
+      const external = ['ollama', 'openai', 'anthropic'].includes(provider);
+      settings.style.display = external ? 'grid' : 'none';
+      keyField.style.display = provider === 'ollama' ? 'none' : 'grid';
+      cloudModelField.style.display = provider === 'ollama' ? 'none' : 'grid';
+      ollamaModelField.style.display = provider === 'ollama' ? 'grid' : 'none';
+      endpoint.placeholder = provider === 'ollama'
+        ? 'http://127.0.0.1:11434'
+        : provider === 'openai'
+          ? 'https://api.openai.com'
+          : 'https://api.anthropic.com';
+      const status = document.getElementById('model-status');
+      if (status) status.style.display = provider === 'webllm' ? 'block' : 'none';
+      if (provider === 'ollama') loadOllamaModels();
+      if (provider === 'openai' || provider === 'anthropic') loadProviderModels();
+    }
+
+    async function loadProviderModels() {
+      const provider = document.getElementById('planner-mode').value;
+      if (!['openai', 'anthropic'].includes(provider)) return;
+      const select = document.getElementById('provider-model');
+      const status = document.getElementById('cloud-model-status');
+      const previous = select.value;
+      const apiKey = document.getElementById('provider-api-key').value.trim();
+      const baseUrl = document.getElementById('provider-base-url').value.trim();
+      select.disabled = true;
+      status.textContent = 'Loading models available to your account…';
+      try {
+        const response = await fetch('/api/planner/models', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, apiKey, baseUrl }),
+        });
+        const payload = await readResponseBody(response);
+        if (!response.ok) throw new Error(payload.error || response.statusText);
+        select.innerHTML = '';
+        if (!payload.models.length) {
+          select.innerHTML = '<option value="">No compatible models available</option>';
+          status.textContent = 'The provider returned no compatible text models.';
+          return;
+        }
+        payload.models.forEach((name) => {
+          const option = document.createElement('option');
+          option.value = name;
+          option.textContent = name;
+          select.appendChild(option);
+        });
+        if (payload.models.includes(previous)) select.value = previous;
+        status.textContent = payload.models.length + ' available model' + (payload.models.length === 1 ? '' : 's') + ' found.';
+      } catch (error) {
+        select.innerHTML = '<option value="">Models unavailable</option>';
+        status.textContent = error instanceof Error ? error.message : String(error);
+      } finally {
+        select.disabled = false;
+      }
+    }
+
+    async function loadOllamaModels() {
+      const select = document.getElementById('ollama-model');
+      const status = document.getElementById('ollama-model-status');
+      const previous = select.value;
+      const baseUrl = document.getElementById('provider-base-url').value.trim();
+      select.disabled = true;
+      status.textContent = 'Discovering installed Ollama models…';
+      try {
+        const response = await fetch('/api/planner/models?baseUrl=' + encodeURIComponent(baseUrl));
+        const payload = await readResponseBody(response);
+        if (!response.ok) throw new Error(payload.error || response.statusText);
+        select.innerHTML = '';
+        if (!payload.models.length) {
+          select.innerHTML = '<option value="">No installed models found</option>';
+          status.textContent = 'Install one with “ollama pull MODEL”, then refresh.';
+          return;
+        }
+        payload.models.forEach((name) => {
+          const option = document.createElement('option');
+          option.value = name;
+          option.textContent = name;
+          select.appendChild(option);
+        });
+        if (payload.models.includes(previous)) select.value = previous;
+        status.textContent = payload.models.length + ' installed model' + (payload.models.length === 1 ? '' : 's') + ' found.';
+      } catch (error) {
+        select.innerHTML = '<option value="">Ollama is unavailable</option>';
+        status.textContent = error instanceof Error ? error.message : String(error);
+      } finally {
+        select.disabled = false;
+      }
+    }
+
     async function runTest() {
       const test = selectedTest();
       if (!test || state.isRunning) return;
+      if (!(await ensurePlannerReady())) return;
       const startedAt = Date.now();
+      const selectedPlanner = document.getElementById('planner-mode').value;
       state.isRunning = true;
       state.runningTest = {
         id: test.id,
         name: test.name,
-        planner: test.planner,
+        planner: selectedPlanner,
         browser: test.browser,
       };
       state.currentView = 'test-running';
       render();
 
       try {
-        const response = await fetch('/api/tests/' + test.id + '/run', { method: 'POST' });
+        const headed = document.getElementById('headed-mode').checked;
+        const planner = document.getElementById('planner-mode').value;
+        const response = await fetch('/api/tests/' + test.id + '/run?headed=' + headed + '&planner=' + planner, { method: 'POST' });
         const payload = await readResponseBody(response);
         if (!response.ok) {
           alert('Error running test: ' + (payload.error || response.statusText));
@@ -1739,13 +1960,15 @@
 
     async function runSuite() {
       if (state.isRunning || state.tests.length === 0) return;
+      if (!(await ensurePlannerReady())) return;
       const startedAt = Date.now();
+      const selectedPlanner = document.getElementById('planner-mode').value;
       state.isRunning = true;
       state.runningSuite = {
         tests: state.tests.map((test) => ({
           name: test.name,
           status: test.status,
-          planner: test.planner,
+          planner: selectedPlanner,
           browser: test.browser,
         })),
       };
@@ -1757,7 +1980,9 @@
       render();
 
       try {
-        const response = await fetch('/api/suite/run', { method: 'POST' });
+        const headed = document.getElementById('headed-mode').checked;
+        const planner = document.getElementById('planner-mode').value;
+        const response = await fetch('/api/suite/run?headed=' + headed + '&planner=' + planner, { method: 'POST' });
         const payload = await readResponseBody(response);
         if (!response.ok) {
           alert('Error running suite: ' + (payload.error || response.statusText));
@@ -1798,6 +2023,14 @@
       }
     });
 
+    window.runoraModelReady = false;
+    window.addEventListener('runora:model-status', (event) => {
+      const status = document.getElementById('model-status');
+      if (status) status.textContent = event.detail.message;
+      window.runoraModelReady = Boolean(event.detail.ready);
+    });
+    syncProviderFields();
+
     refresh();
     setInterval(() => {
       if (!state.isRunning && document.visibilityState === 'visible') {
@@ -1805,5 +2038,6 @@
       }
     }, 3000);
   </script>
+  <script type="module" src="/browser-planner.js"></script>
 </body>
 </html>

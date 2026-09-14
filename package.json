@@ -1,15 +1,16 @@
 {
   "name": "runora",
-  "version": "1.0.0",
+  "version": "1.0.8",
   "description": "Runora is an evidence-first browser testing platform that uses AI to understand what should be tested while Playwright executes and proves what actually happened.",
   "main": "dist/packages/core/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && mkdir -p dist/packages/workspace && cp packages/workspace/ui.html dist/packages/workspace/ui.html",
+    "build": "tsc -p tsconfig.json && mkdir -p dist/packages/workspace && cp packages/workspace/ui.html dist/packages/workspace/ui.html && vite build --config vite.workspace.config.ts",
     "build:wasm": "tsc -p tsconfig.wasm.json",
     "test": "vitest run",
     "dev": "tsx packages/cli/index.ts",
     "web:dev": "vite",
     "web:build": "vite build",
+    "packages:publish": "npm publish",
     "prepack": "npm run build"
   },
   "workspaces": [
@@ -39,6 +40,7 @@
     "@types/node": "^26.5.1",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
+    "vite": "^8.3.0",
     "vitest": "^5.0.0"
   },
   "type": "module",

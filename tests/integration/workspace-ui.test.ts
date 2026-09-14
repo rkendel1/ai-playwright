@@ -86,7 +86,7 @@ async function seedRunWithArtifacts(options: {
   workspaceDir: string;
   testId: string;
   testName: string;
-  status: "passed" | "failed";
+  status: "passed" | "failed" | "blocked";
   screenshot?: boolean;
   screenshotPath?: string;
   step: any;
@@ -256,6 +256,10 @@ describe("workspace UI", () => {
     await page!.getByText("Inspect overlapping element").waitFor();
     await page!.getByText("Candidates preserve evidence and do not change the canonical test until accepted").waitFor();
     await page!.getByText("Heal: force click candidate").waitFor();
+    await page!.getByRole("button", { name: "Copy error" }).first().waitFor();
+    await page!.getByRole("button", { name: "Copy observation" }).waitFor();
+    await page!.getByRole("button", { name: "Copy action" }).waitFor();
+    await page!.getByRole("button", { name: "Copy screenshot" }).waitFor();
     await page!.getByText("Heal: actionability wait candidate").click();
     await page!.getByRole("heading", { name: "Heal Candidate", exact: true }).waitFor();
     await page!.getByText("Canonical test").waitFor();
@@ -340,5 +344,38 @@ describe("workspace UI", () => {
     await page!.getByText("text 'Ready' is visible").waitFor();
     await page!.getByText("None").first().waitFor();
     expect(await page!.getByText("Suggested Next Steps").count()).toBe(0);
+  });
+
+  it("renders a planner stop as blocked rather than passed", async () => {
+    createTestFile(path.join(workspaceDir, "tests"), "Blocked Run", "Complete an unsupported flow");
+    await seedRunWithArtifacts({
+      workspaceDir,
+      testId: "blocked-run",
+      testName: "Blocked Run",
+      status: "blocked",
+      step: {
+        index: 2,
+        observation: {
+          id: "obs-2",
+          url: "http://127.0.0.1:3000/",
+          title: "Home",
+          elements: [],
+        },
+        action: { type: "blocked", reason: "Cannot identify the next safe step" },
+        validation: { status: "success" },
+        result: { status: "success" },
+        timestamp: Date.now(),
+      },
+    });
+
+    uiServer = await startUIServer(workspaceDir, 0);
+    await page!.goto(serverBaseUrl(uiServer));
+    await testCard(page!, "Blocked Run").click({ timeout: 2000 });
+    await page!.locator(".run-history-card").first().click({ timeout: 2000 });
+
+    const blockedStep = page!.locator(".step-button").filter({ hasText: "Step 2" });
+    await blockedStep.waitFor({ timeout: 2000 });
+    expect(await blockedStep.textContent()).toContain("BLOCKED");
+    expect(await blockedStep.getByText("Passed", { exact: true }).count()).toBe(0);
   });
 });

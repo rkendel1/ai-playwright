@@ -32,6 +32,7 @@ function config(workspaceDir: string, planner: ResolvedConfig["planner"] = "dete
     artifacts: path.join(workspaceDir, "artifacts"),
     tests: path.join(workspaceDir, "tests"),
     planner,
+    headless: true,
     model: planner === "webllm" ? { provider: "webllm", model: "test-model" } : undefined,
   };
 }

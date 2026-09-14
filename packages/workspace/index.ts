@@ -27,6 +27,7 @@ export {
   listSuiteRuns,
 } from "./suite-storage.js";
 export { runTest, runTests, runSuite, type RunResult } from "./runner.js";
+export { ProviderPlanner, type ExternalProvider, type ProviderSettings } from "./provider-planner.js";
 export {
   createHealCandidate,
   acceptHealCandidate,

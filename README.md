@@ -37,11 +37,49 @@ npm test
 
 ## The Runora Experience
 
-Start from a clean workspace:
+Inside an existing application, install Runora and start its test-authoring workspace:
 
 ```bash
+npm install runora
 npx runora init
-npx runora ui
+```
+
+`init` creates the configuration and test directories, installs Chromium when it
+is missing, starts the workspace on an available local port, and opens it in your
+default browser. Click **New Test** there to describe each required behavior in
+plain English. Keep the terminal running while using the workspace. Pass
+`--no-open` if you do not want it to open a browser tab.
+
+Runs are headless by default. Enable **Show browser while tests run** in the
+workspace to watch the browser live, or use `npx runora test <name> --headed`.
+Use `--headless` to force background mode. The workspace defaults to the
+intelligent browser-local WebLLM planner. You can also choose **Ollama**,
+**OpenAI**, or **Anthropic (Claude)** from the Planner menu; the limited
+deterministic planner remains available as an explicit option.
+
+For Ollama, select **Local (Ollama)**. Runora discovers models from the running
+Ollama service and presents them in a dropdown; use **Refresh** after installing
+a new model. You can optionally change the default endpoint
+`http://127.0.0.1:11434`. This HTTP-based discovery works the same way on macOS,
+Windows, and Linux and does not depend on platform-specific install paths. For
+OpenAI or Claude, select the provider and enter an API key. Runora loads the
+models available to that provider account into a dropdown. You may instead start Runora with
+`OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in the environment. Typed and
+environment credentials stay in the local Runora process; they are not written
+to configuration, test definitions, run history, screenshots, or evidence.
+
+On the first intelligent run, the workspace downloads the model weights directly
+in the browser and displays loading progress. The browser caches those weights
+for later runs and requests persistent browser storage so normal refreshes and
+Runora restarts do not download them again. Runora also remembers its workspace
+port because browser caches are scoped to the local origin; using `localhost` on
+a different port creates a separate browser cache. Planning stays in the browser;
+the local Runora process performs Playwright execution and writes evidence.
+
+For CI or scripted setup without a running UI, use:
+
+```bash
+npx runora init --no-ui --skip-browser-install
 ```
 
 Then the product flow is:
@@ -90,13 +128,15 @@ const result = await browser.task(`
 console.log(result);
 ```
 
-### CLI
+### One-shot CLI
 
 ```bash
-npx runora run --planner webllm --url http://localhost:3000 "Create a project called Demo and verify it appears"
+npx runora run --planner deterministic --url http://localhost:3000 "Create a project called Demo and verify it appears"
 ```
 
-Use `--planner deterministic` only for deterministic local tests. The WebLLM planner does not fall back to deterministic behavior; if the local WebLLM model cannot initialize, the run fails clearly.
+Intelligent WebLLM runs are launched from the browser workspace created by
+`npx runora init`. This keeps model inference and its persistent cache in the
+browser. The one-shot terminal command supports deterministic tasks only.
 
 ### Workspace config
 

@@ -1,6 +1,5 @@
 import { aiPlaywright } from "../core/index.js";
 import { CliPlannerAdapter } from "../cli/adapters/CliPlannerAdapter.js";
-import { WebLLMPlannerAdapter } from "../webllm/planner.js";
 import type { Planner } from "../core/planner.js";
 import type { TestDefinition } from "./test-model.js";
 import type { ModelConfig, ResolvedConfig } from "./config.js";
@@ -34,7 +33,9 @@ function modelName(model: ModelConfig | undefined): string | undefined {
 
 function createPlanner(config: ResolvedConfig): Planner {
   if (config.planner === "webllm") {
-    return new WebLLMPlannerAdapter({ model: modelName(config.model) });
+    throw new Error(
+      "Intelligent planning runs in the Runora browser workspace. Start `npx runora init` and run the test from that UI.",
+    );
   }
   if (config.planner === "deterministic" || config.planner === "mock") {
     return new CliPlannerAdapter();
@@ -44,11 +45,13 @@ function createPlanner(config: ResolvedConfig): Planner {
 
 export async function runTest(
   test: TestDefinition,
-  config: ResolvedConfig
+  config: ResolvedConfig,
+  plannerOverride?: Planner,
+  signal?: AbortSignal,
 ): Promise<RunResult> {
   const url = test.url || config.url;
   const evidencePath = getRunEvidencePath(config.artifacts, "current");
-  const planner = createPlanner(config);
+  const planner = plannerOverride ?? createPlanner(config);
   const model = config.planner === "webllm" ? modelName(config.model) : undefined;
 
   // Create run record
@@ -60,7 +63,7 @@ export async function runTest(
     // Use existing execution path
     const browser = await aiPlaywright({
       browser: config.browser,
-      headless: true,
+      headless: config.headless,
       planner,
       url,
       artifactsDir: getRunEvidencePath(config.artifacts, runId),
@@ -68,6 +71,7 @@ export async function runTest(
         maxSteps: 50,
         maxTimeMs: 300_000,
       },
+      signal,
     });
 
     const taskResult = await browser.task(test.task);
@@ -134,13 +138,14 @@ export async function runTests(
 export async function runSuite(
   tests: TestDefinition[],
   config: ResolvedConfig,
-  options: { runOne?: (test: TestDefinition, config: ResolvedConfig) => Promise<RunResult> } = {}
+  options: { runOne?: (test: TestDefinition, config: ResolvedConfig) => Promise<RunResult>; signal?: AbortSignal } = {}
 ): Promise<SuiteRun> {
   const suiteRun = createSuiteRun(config.artifacts);
   const runOne = options.runOne ?? runTest;
   const entries: SuiteRunEntry[] = [];
 
   for (const test of tests) {
+    if (options.signal?.aborted) break;
     const result = await runOne(test, config);
     entries.push({
       testId: result.testId,

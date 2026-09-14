@@ -43,8 +43,9 @@ fs.writeFileSync(
 fs.writeFileSync(
   path.join(projectDir, "runora.config.ts"),
   `export default {
-  url: "http://127.0.0.1:3000",
-  planner: "deterministic",
+  url: "http://localhost:3000",
+  planner: "webllm",
+  headless: true,
   browser: "obscura",
   artifacts: "./artifacts",
   tests: "./tests",
@@ -93,4 +94,4 @@ if (install) {
 
 console.log(`✓ Runora project created at ${projectDir}`);
 console.log(`  cd ${projectName}`);
-console.log("  npx runora");
+console.log("  npx runora init");

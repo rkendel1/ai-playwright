@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import url from "node:url";
 import {
@@ -19,6 +20,9 @@ import {
   acceptHealCandidate,
 } from "./index.js";
 import type { ResolvedConfig, TestDefinition } from "./index.js";
+import type { BrowserAction } from "../core/actions.js";
+import type { Planner, PlannerInput } from "../core/planner.js";
+import { ProviderPlanner, type ProviderSettings } from "./provider-planner.js";
 
 /**
  * Interactive UI server for Runora Workspace
@@ -28,6 +32,135 @@ import type { ResolvedConfig, TestDefinition } from "./index.js";
 
 let currentConfig: ResolvedConfig;
 let currentTests: TestDefinition[] = [];
+const WEBLLM_MODEL = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+const WEBLLM_MODEL_SOURCE = `https://huggingface.co/mlc-ai/${WEBLLM_MODEL}/resolve/main`;
+const WEBLLM_LIB_SOURCE = "https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/v0_2_84/base/Llama-3.2-1B-Instruct-q4f16_1_cs1k-webgpu.wasm";
+
+function runoraCacheDir(): string {
+  if (process.env.RUNORA_CACHE_DIR) return path.join(process.env.RUNORA_CACHE_DIR, "webllm", WEBLLM_MODEL);
+  const platformRoot = process.platform === "win32"
+    ? process.env.LOCALAPPDATA
+    : process.platform === "darwin"
+      ? path.join(os.homedir(), "Library", "Caches")
+      : process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache");
+  return path.join(platformRoot || os.tmpdir(), "runora", "webllm", WEBLLM_MODEL);
+}
+
+async function serveCachedAsset(res: http.ServerResponse, cacheName: string, sourceUrl: string): Promise<void> {
+  const cacheDir = runoraCacheDir();
+  const target = path.join(cacheDir, cacheName);
+  if (fs.existsSync(target)) {
+    res.writeHead(200, { "Content-Type": cacheName.endsWith(".json") ? "application/json" : "application/octet-stream", "Content-Length": fs.statSync(target).size });
+    fs.createReadStream(target).pipe(res);
+    return;
+  }
+  const upstream = await fetch(sourceUrl);
+  if (!upstream.ok) throw new Error(`Model download failed (${upstream.status})`);
+  const bytes = Buffer.from(await upstream.arrayBuffer());
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const temporary = `${target}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, bytes);
+  fs.renameSync(temporary, target);
+  res.writeHead(200, { "Content-Type": upstream.headers.get("content-type") || "application/octet-stream", "Content-Length": bytes.length });
+  res.end(bytes);
+}
+
+export async function discoverOllamaModels(baseUrl = "http://127.0.0.1:11434"): Promise<string[]> {
+  const endpoint = new URL(`${baseUrl.replace(/\/$/, "")}/api/tags`);
+  if (!["http:", "https:"].includes(endpoint.protocol)) throw new Error("Ollama endpoint must use HTTP or HTTPS");
+  const response = await fetch(endpoint, { signal: AbortSignal.timeout(5_000) });
+  if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
+  const body = await response.json() as { models?: Array<{ name?: string; model?: string }> };
+  return [...new Set((body.models || []).map((entry) => entry.name || entry.model).filter((name): name is string => Boolean(name)))];
+}
+
+export async function discoverCloudModels(
+  provider: "openai" | "anthropic",
+  apiKey: string,
+  baseUrl?: string,
+): Promise<string[]> {
+  if (!apiKey) throw new Error(`An API key is required to discover ${provider} models`);
+  const root = (baseUrl || (provider === "openai" ? "https://api.openai.com" : "https://api.anthropic.com")).replace(/\/$/, "");
+  const headers: Record<string, string> = provider === "openai"
+    ? { Authorization: `Bearer ${apiKey}` }
+    : { "x-api-key": apiKey, "anthropic-version": "2023-06-01" };
+  const response = await fetch(`${root}/v1/models`, { headers, signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) throw new Error(`${provider} returned ${response.status}`);
+  const body = await response.json() as { data?: Array<{ id?: string }> };
+  const ids = (body.data || []).map((entry) => entry.id).filter((id): id is string => Boolean(id));
+  const usable = provider === "openai"
+    ? ids.filter((id) => /^(gpt-|o\d)/i.test(id) && !/(audio|realtime|transcri|image|tts|search|moderation)/i.test(id))
+    : ids.filter((id) => /^claude-/i.test(id));
+  return [...new Set(usable)].sort((left, right) => right.localeCompare(left));
+}
+
+class BrowserPlannerBroker implements Planner {
+  readonly provider = "browser-webllm";
+  private sequence = 0;
+  private requests: Array<{ id: string; input: PlannerInput }> = [];
+  private pending = new Map<string, { resolve(action: BrowserAction): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>();
+
+  next(input: PlannerInput): Promise<BrowserAction> {
+    const id = `planner-${Date.now()}-${++this.sequence}`;
+    this.requests.push({ id, input });
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error("Browser planner did not respond within 10 minutes."));
+      }, 600_000);
+      this.pending.set(id, { resolve, reject, timer });
+    });
+  }
+
+  take() {
+    return this.requests.shift();
+  }
+
+  respond(id: string, action?: BrowserAction, error?: string) {
+    const pending = this.pending.get(id);
+    if (!pending) return false;
+    clearTimeout(pending.timer);
+    this.pending.delete(id);
+    if (error) pending.reject(new Error(`Browser WebLLM failed: ${error}`));
+    else if (action) pending.resolve(action);
+    else pending.reject(new Error("Browser WebLLM returned no action."));
+    return true;
+  }
+}
+
+const browserPlanner = new BrowserPlannerBroker();
+let providerSettings: ProviderSettings | undefined;
+
+function plannerForRun(config: ResolvedConfig): Planner | undefined {
+  if (config.planner === "webllm") return browserPlanner;
+  if (["ollama", "openai", "anthropic"].includes(config.planner)) {
+    if (!providerSettings || providerSettings.provider !== config.planner) {
+      throw new Error(`Configure ${config.planner} in the Planner panel before running tests.`);
+    }
+    return new ProviderPlanner(providerSettings);
+  }
+  return undefined;
+}
+
+function configForRun(
+  headed: string | string[] | undefined,
+  planner: string | string[] | undefined,
+): ResolvedConfig {
+  const allowedPlanners = ["webllm", "ollama", "openai", "anthropic", "deterministic"];
+  const selectedPlanner = typeof planner === "string" && allowedPlanners.includes(planner)
+    ? planner as ResolvedConfig["planner"]
+    : currentConfig.planner;
+  return {
+    ...currentConfig,
+    planner: selectedPlanner,
+    model: selectedPlanner === "webllm"
+      ? currentConfig.model
+      : providerSettings?.provider === selectedPlanner
+        ? { provider: providerSettings.provider, model: providerSettings.model }
+        : undefined,
+    headless: headed === "true" ? false : headed === "false" ? true : currentConfig.headless,
+  };
+}
 
 function contentTypeFor(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -135,7 +268,11 @@ async function parseJsonBody(req: http.IncomingMessage): Promise<any> {
   });
 }
 
-export async function startUIServer(workspaceDir: string, port: number = 3001): Promise<http.Server> {
+export async function startUIServer(
+  workspaceDir: string,
+  port: number = 3001,
+  options: { announce?: boolean } = {},
+): Promise<http.Server> {
   currentConfig = await resolveConfig(workspaceDir);
 
   const server = http.createServer(async (req, res) => {
@@ -153,10 +290,145 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
     const parsedUrl = url.parse(req.url || "/", true);
     const pathname = parsedUrl.pathname;
 
+    if (pathname?.startsWith("/api/webllm/model/")) {
+      try {
+        const requestedAsset = pathname.slice("/api/webllm/model/".length);
+        const asset = requestedAsset.startsWith("resolve/main/") ? requestedAsset.slice("resolve/main/".length) : requestedAsset;
+        if (!asset || !/^[a-zA-Z0-9._/-]+$/.test(asset) || asset.includes("..")) throw new Error("Invalid model asset path");
+        await serveCachedAsset(res, asset.replaceAll("/", "__"), `${WEBLLM_MODEL_SOURCE}/${asset}`);
+      } catch (error) {
+        res.writeHead(502, { "Content-Type": "text/plain" });
+        res.end(error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
+
+    if (pathname === "/api/webllm/model-lib") {
+      try {
+        await serveCachedAsset(res, "model-lib.wasm", WEBLLM_LIB_SOURCE);
+      } catch (error) {
+        res.writeHead(502, { "Content-Type": "text/plain" });
+        res.end(error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
+
+    if (pathname === "/api/webllm/cache-status") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ready: fs.existsSync(path.join(runoraCacheDir(), ".ready")) }));
+      return;
+    }
+
+    if (pathname === "/api/webllm/cache-ready" && req.method === "POST") {
+      fs.mkdirSync(runoraCacheDir(), { recursive: true });
+      fs.writeFileSync(path.join(runoraCacheDir(), ".ready"), new Date().toISOString());
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
     // Serve UI HTML
     if (pathname === "/" || pathname === "/index.html") {
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end(getUIHTML());
+      return;
+    }
+
+    if (pathname === "/browser-planner.js" && req.method === "GET") {
+      const adjacentBundle = new URL("./browser-planner.js", import.meta.url);
+      const developmentBundle = path.resolve("dist/packages/workspace/browser-planner.js");
+      const bundlePath = fs.existsSync(adjacentBundle) ? adjacentBundle : developmentBundle;
+      if (!fs.existsSync(bundlePath)) {
+        res.writeHead(503, { "Content-Type": "text/plain" });
+        res.end("Browser planner bundle is missing. Run `npm run build`.");
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      res.end(fs.readFileSync(bundlePath, "utf-8"));
+      return;
+    }
+
+    if (pathname === "/api/planner/request" && req.method === "GET") {
+      const request = browserPlanner.take();
+      res.writeHead(request ? 200 : 204, { "Content-Type": "application/json" });
+      res.end(request ? JSON.stringify(request) : undefined);
+      return;
+    }
+
+    if (pathname === "/api/planner/response" && req.method === "POST") {
+      try {
+        const body = await parseJsonBody(req);
+        const accepted = browserPlanner.respond(body.id, body.action, body.error);
+        res.writeHead(accepted ? 204 : 404);
+        res.end();
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: String(error) }));
+      }
+      return;
+    }
+
+    if (pathname === "/api/planner/settings" && req.method === "POST") {
+      try {
+        const body = await parseJsonBody(req);
+        if (!["ollama", "openai", "anthropic"].includes(body.provider)) throw new Error("Unsupported provider");
+        if (typeof body.model !== "string" || !body.model.trim()) throw new Error("Model is required");
+        const environmentKey = body.provider === "openai"
+          ? process.env.OPENAI_API_KEY
+          : body.provider === "anthropic"
+            ? process.env.ANTHROPIC_API_KEY
+            : undefined;
+        providerSettings = {
+          provider: body.provider,
+          model: body.model.trim(),
+          apiKey: (typeof body.apiKey === "string" ? body.apiKey.trim() : "") || environmentKey,
+          baseUrl: typeof body.baseUrl === "string" ? body.baseUrl.trim() : undefined,
+        };
+        if (body.provider !== "ollama" && !providerSettings.apiKey) {
+          const variable = body.provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY";
+          throw new Error(`Enter an API key or set ${variable} before starting Runora`);
+        }
+        res.writeHead(204);
+        res.end();
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+      }
+      return;
+    }
+
+    if (pathname === "/api/planner/models" && req.method === "GET") {
+      try {
+        const requested = typeof parsedUrl.query.baseUrl === "string" ? parsedUrl.query.baseUrl.trim() : "";
+        const baseUrl = (requested || "http://127.0.0.1:11434").replace(/\/$/, "");
+        const models = await discoverOllamaModels(baseUrl);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ models }));
+      } catch (error) {
+        res.writeHead(502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          error: `Could not discover Ollama models. Make sure Ollama is installed and running. ${error instanceof Error ? error.message : String(error)}`,
+        }));
+      }
+      return;
+    }
+
+    if (pathname === "/api/planner/models" && req.method === "POST") {
+      try {
+        const body = await parseJsonBody(req);
+        if (!["ollama", "openai", "anthropic"].includes(body.provider)) throw new Error("Unsupported provider");
+        const environmentKey = body.provider === "openai" ? process.env.OPENAI_API_KEY : body.provider === "anthropic" ? process.env.ANTHROPIC_API_KEY : undefined;
+        const key = (typeof body.apiKey === "string" ? body.apiKey.trim() : "") || environmentKey || "";
+        const baseUrl = typeof body.baseUrl === "string" ? body.baseUrl.trim() : undefined;
+        const models = body.provider === "ollama"
+          ? await discoverOllamaModels(baseUrl)
+          : await discoverCloudModels(body.provider, key, baseUrl);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ models }));
+      } catch (error) {
+        res.writeHead(502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+      }
       return;
     }
 
@@ -407,7 +679,10 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
           return;
         }
 
-        const suiteRun = await runSuite(currentTests, currentConfig);
+        const runConfig = configForRun(parsedUrl.query.headed, parsedUrl.query.planner);
+        const suiteRun = await runSuite(currentTests, runConfig, {
+          runOne: (test, config) => runTest(test, config, plannerForRun(config)),
+        });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(suiteRun));
       } catch {
@@ -428,7 +703,8 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
           return;
         }
 
-        const result = await runTest(test, currentConfig);
+        const runConfig = configForRun(parsedUrl.query.headed, parsedUrl.query.planner);
+        const result = await runTest(test, runConfig, plannerForRun(runConfig));
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(result));
       } catch (error) {
@@ -449,13 +725,15 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
       reject(error);
     };
     server.once("error", onError);
-    server.listen(port, () => {
+    server.listen(port, "127.0.0.1", () => {
       server.off("error", onError);
       const address = server.address();
       const actualPort = address && typeof address !== "string" ? address.port : port;
-      console.log(`\n📊 Runora UI`);
-      console.log(`   Open: http://127.0.0.1:${actualPort}`);
-      console.log(`   Workspace: ${workspaceDir}`);
+      if (options.announce !== false) {
+        console.log(`\n📊 Runora UI`);
+        console.log(`   Open: http://localhost:${actualPort}`);
+        console.log(`   Workspace: ${workspaceDir}`);
+      }
       resolve();
     });
   });

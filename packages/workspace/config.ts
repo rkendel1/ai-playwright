@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseExportDefaultObject } from "./simple-object.js";
 
-export type PlannerMode = "webllm" | "deterministic" | "mock";
-export type ModelConfig = "webllm" | { provider: "webllm"; model: string };
+export type PlannerMode = "webllm" | "ollama" | "openai" | "anthropic" | "deterministic" | "mock";
+export type ModelConfig = "webllm" | { provider: Exclude<PlannerMode, "deterministic" | "mock">; model: string };
 
 export type WorkspaceConfig = {
   url?: string;
@@ -12,6 +12,7 @@ export type WorkspaceConfig = {
   tests?: string;
   planner?: PlannerMode;
   model?: ModelConfig;
+  headless?: boolean;
 };
 
 export type ConfigSource = "cli" | "workspace" | "default";
@@ -23,15 +24,17 @@ export type ResolvedConfig = {
   tests: string;
   planner: PlannerMode;
   model?: ModelConfig;
+  headless: boolean;
   configPath?: string;
 };
 
 const DEFAULTS: ResolvedConfig = {
-  url: "http://127.0.0.1:3000",
+  url: "http://localhost:3000",
   browser: "obscura",
   artifacts: "./artifacts",
   tests: "./tests",
-  planner: "deterministic",
+  planner: "webllm",
+  headless: true,
 };
 
 function withoutUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {
@@ -100,8 +103,9 @@ export async function resolveConfig(
 
 export function createDefaultConfig(workspaceDir: string): string {
   return `export default {
-  url: "http://127.0.0.1:3000",
-  planner: "deterministic",
+  url: "http://localhost:3000",
+  planner: "webllm",
+  headless: true,
   browser: "obscura",
   artifacts: "./artifacts",
   tests: "./tests",

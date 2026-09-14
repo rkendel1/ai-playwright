@@ -9,7 +9,7 @@ import type { BrowserRuntime } from "./runtime.js";
 import { ObscuraRuntime } from "../obscura/runtime.js";
 import type { Page } from "playwright";
 
-export type PlannerMode = "webllm" | "deterministic" | "mock";
+export type PlannerMode = "webllm" | "ollama" | "openai" | "anthropic" | "deterministic" | "mock";
 
 export type AiPlaywrightOptions = {
   browser?: "obscura";
@@ -23,6 +23,7 @@ export type AiPlaywrightOptions = {
   };
   artifactsDir?: string;
   runtime?: BrowserRuntime;
+  signal?: AbortSignal;
 };
 
 export type AiPlaywrightBrowser = {
@@ -75,6 +76,7 @@ export async function aiPlaywright(options: AiPlaywrightOptions = {}): Promise<A
           defaultUrl: options.url,
           artifactsRoot: options.artifactsDir ?? path.resolve(".artifacts"),
           taskId: `task-${String(taskCounter).padStart(3, "0")}`,
+          signal: options.signal,
         });
       };
 

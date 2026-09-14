@@ -90,4 +90,38 @@ describe("task trace planner evidence", () => {
       result: { status: "success", output: "Ready" },
     });
   });
+
+  it("feeds a premature finish back to the planner and recovers with verification", async () => {
+    let call = 0;
+    const planner: Planner = {
+      provider: "browser-webllm",
+      async next() {
+        call += 1;
+        if (call === 1) return { type: "finish", result: "success", reason: "Done" };
+        if (call === 2) return { type: "assert", assertion: { type: "textVisible", text: "Ready" } };
+        return { type: "finish", result: "success", reason: "Verified" };
+      },
+    };
+    const executor: BrowserExecutor = { async execute() { return { status: "success" }; } };
+    const page = {
+      async screenshot() {},
+      async evaluate() {
+        return { id: `obs-${call}`, generation: call, url: "http://localhost:3000/", title: "App", text: "Ready", elements: [] };
+      },
+    };
+
+    const result = await runTask({
+      planner,
+      executor,
+      page: page as never,
+      task: "Verify Ready",
+      limits: { maxSteps: 3, maxTimeMs: 1000 },
+      artifactsRoot,
+      taskId: "task-recovery",
+    });
+
+    expect(result.status).toBe("passed");
+    expect(result.steps.map((step) => (step.action as { type?: string } | undefined)?.type)).toEqual(["finish", "assert", "finish"]);
+    expect(result.steps[0].validation.status).toBe("failure");
+  });
 });

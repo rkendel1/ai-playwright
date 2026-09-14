@@ -11,6 +11,15 @@ describe("workspace config", () => {
     await fs.rm(workspaceDir, { recursive: true, force: true });
   });
 
+  it("defaults new workspaces to intelligent headless execution", async () => {
+    await fs.mkdir(workspaceDir, { recursive: true });
+
+    await expect(resolveConfig(workspaceDir)).resolves.toMatchObject({
+      planner: "webllm",
+      headless: true,
+    });
+  });
+
   it("loads explicit WebLLM planner and model configuration", async () => {
     await fs.mkdir(workspaceDir, { recursive: true });
     await fs.writeFile(

@@ -203,7 +203,9 @@ export class Kernel {
           timestamp: Date.now(),
           telemetry,
         });
-        this.state = { phase: "blocked", reason };
+        // Feed the rejected finish back through history so the planner can
+        // recover by producing an observable assertion on the next turn.
+        this.state = { phase: "observe", observation, stepIndex: stepIndex + 1 };
         return null;
       }
 

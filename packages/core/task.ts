@@ -23,7 +23,18 @@ export type TaskRunnerOptions = {
   artifactsRoot: string;
   taskId: string;
   policy?: ActionPolicy;
+  signal?: AbortSignal;
 };
+
+function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new Error("Test stopped by user."));
+  return new Promise<T>((resolve, reject) => {
+    const stop = () => reject(new Error("Test stopped by user."));
+    signal.addEventListener("abort", stop, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", stop));
+  });
+}
 
 async function capture(page: Page, dir: string, index: number, label: string) {
   const filename = `${String(index).padStart(3, "0")}-${label}.png`;
@@ -64,7 +75,7 @@ function failedStep(index: number, observation: unknown, action: unknown, valida
 }
 
 export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
-  const { planner, executor, page, task, limits, defaultUrl, artifactsRoot, taskId } = options;
+  const { planner, executor, page, task, limits, defaultUrl, artifactsRoot, taskId, signal } = options;
   const startedAt = Date.now();
   const artifactsPath = path.join(artifactsRoot, taskId);
   const policy: ActionPolicy = {
@@ -82,6 +93,10 @@ export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
   await capture(page, artifactsPath, screenshotIndex++, "initial");
 
   for (let index = 1; index <= limits.maxSteps; index += 1) {
+    if (signal?.aborted) {
+      await capture(page, artifactsPath, screenshotIndex++, "stopped").catch(() => undefined);
+      return writeTrace(artifactsPath, { status: "blocked", steps, evidence, error: { reason: "Test stopped by user." }, artifactsPath, durationMs: Date.now() - startedAt });
+    }
     if (Date.now() - startedAt > limits.maxTimeMs) {
       evidence.push({ type: "limit", assertion: "Task completed within time budget", result: "failed" });
       await capture(page, artifactsPath, screenshotIndex++, "failure");
@@ -109,7 +124,7 @@ export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
     let proposed: unknown;
     let stepPlannerTrace: StepPlannerTrace | undefined;
     try {
-      proposed = await planner.next(plannerInput);
+      proposed = await abortable(planner.next(plannerInput), signal);
       stepPlannerTrace = plannerTrace(planner);
     } catch (error) {
       stepPlannerTrace = plannerTrace(planner);
@@ -188,15 +203,8 @@ export async function runTask(options: TaskRunnerOptions): Promise<TaskResult> {
       if (!hasVerifiedSuccess) {
         const reason = "Planner requested finish before any successful observable verification.";
         steps.push(failedStep(index, observation, action, { status: "failure", error: reason }, telemetry, stepPlannerTrace));
-        await capture(page, artifactsPath, screenshotIndex++, "failure");
-        return writeTrace(artifactsPath, {
-          status: "blocked",
-          steps,
-          evidence,
-          error: { reason },
-          artifactsPath,
-          durationMs: Date.now() - startedAt,
-        });
+        await capture(page, artifactsPath, screenshotIndex++, `step-${String(index).padStart(3, "0")}-rejected-finish`);
+        continue;
       }
       evidence.push({ type: "limit", assertion: "Task completed within step budget", result: "passed" });
       steps.push({

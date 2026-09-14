@@ -14,6 +14,7 @@ export type ElementObservation = {
   state: {
     visible: boolean;
     enabled: boolean;
+    receivesPointerEvents?: boolean;
     checked?: boolean;
   };
 };
@@ -59,6 +60,14 @@ export async function observe(page: Page): Promise<Observation> {
       const style = window.getComputedStyle(el);
       const rect = el.getBoundingClientRect();
       const visible = style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+      const intersectsViewport = rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth;
+      let receivesPointerEvents = style.pointerEvents !== "none" && intersectsViewport;
+      if (visible && receivesPointerEvents && intersectsViewport) {
+        const x = Math.max(0, Math.min(window.innerWidth - 1, rect.left + rect.width / 2));
+        const y = Math.max(0, Math.min(window.innerHeight - 1, rect.top + rect.height / 2));
+        const hit = document.elementFromPoint(x, y);
+        receivesPointerEvents = Boolean(hit && (hit === el || el.contains(hit)));
+      }
       const id = el.dataset.aipwId ?? `e${index + 1}`;
       el.dataset.aipwId = id;
       const tag = el.tagName.toLowerCase();
@@ -77,6 +86,8 @@ export async function observe(page: Page): Promise<Observation> {
         return tag;
       })();
       const aria = el.getAttribute("aria-label") || "";
+      const ariaDescription = el.getAttribute("aria-description") || "";
+      const title = el.getAttribute("title") || "";
       const text = (el.textContent || "").trim();
       const placeholder = (el as HTMLInputElement).placeholder || "";
       const labelText = "labels" in el
@@ -84,7 +95,9 @@ export async function observe(page: Page): Promise<Observation> {
             .map((label) => (label.textContent || "").trim())
             .find((v) => v.length > 0) || ""
         : "";
-      const name = [aria, labelText, text, placeholder].find((v) => v.length > 0) || tag;
+      const nestedTitle = (el.querySelector("svg title")?.textContent || "").trim();
+      const name = ([aria, labelText, title, ariaDescription, text, placeholder, nestedTitle]
+        .find((v) => v.length > 0) || tag).slice(0, 240);
       const value = "value" in el ? String((el as HTMLInputElement).value ?? "") : undefined;
       const disabled = "disabled" in el ? Boolean((el as HTMLInputElement).disabled) : el.getAttribute("aria-disabled") === "true";
       const checked = "checked" in el ? Boolean((el as HTMLInputElement).checked) : undefined;
@@ -102,12 +115,13 @@ export async function observe(page: Page): Promise<Observation> {
         state: {
           visible,
           enabled: !disabled,
+          receivesPointerEvents,
           checked,
         },
       };
-    }).filter((element) => element.state.visible);
+    }).filter((element) => element.state.visible && element.state.receivesPointerEvents);
 
-    const pageText = (document.body?.innerText || "").slice(0, 4000);
+    const pageText = (document.body?.innerText || "").slice(0, 2500);
 
     return {
       id: observationId,
