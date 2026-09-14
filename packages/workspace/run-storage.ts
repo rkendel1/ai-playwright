@@ -13,6 +13,7 @@ export type StoredRun = RunMetadata & {
   result?: unknown; // TaskResult
   evidence?: string; // Path to evidence directory
   failure?: FailureDiagnosis; // Failure details (if failed)
+  ownership?: unknown; // Heal / promotion lineage metadata
 };
 
 export function generateRunId(): string {
