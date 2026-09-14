@@ -8,6 +8,7 @@ export type TestDefinition = {
   name: string;
   task: string;
   url?: string; // Optional override
+  secretProfileId?: string; // Reference only; values remain in the local vault
 };
 
 export type TestRun = {

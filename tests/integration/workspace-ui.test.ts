@@ -378,4 +378,34 @@ describe("workspace UI", () => {
     expect(await blockedStep.textContent()).toContain("BLOCKED");
     expect(await blockedStep.getByText("Passed", { exact: true }).count()).toBe(0);
   });
+
+  it("saves a credential profile and binds only its vault reference to a test", async () => {
+    uiServer = await startUIServer(workspaceDir, 0);
+    const baseUrl = serverBaseUrl(uiServer);
+    await page!.goto(baseUrl);
+
+    await page!.getByRole("button", { name: "Secrets Vault" }).click();
+    await page!.getByLabel("Profile name").fill("Staging admin");
+    await page!.getByLabel("Username or email").fill("admin@example.test");
+    await page!.getByLabel("Password").fill("do-not-write-this");
+    await page!.getByRole("button", { name: "Save Secret" }).click();
+    await page!.locator("#vault-list").getByText("Staging admin", { exact: true }).waitFor();
+    await page!.getByRole("button", { name: "Close" }).click();
+
+    await page!.getByRole("button", { name: "+ New Test" }).click();
+    const testDialog = page!.getByRole("dialog", { name: "New Test" });
+    await testDialog.getByLabel("Name", { exact: true }).fill("Admin login");
+    await testDialog.getByLabel("Task").fill("Sign in and verify the dashboard");
+    await testDialog.getByLabel("Credential profile (optional)").selectOption({ label: "Staging admin" });
+    await testDialog.getByRole("button", { name: "Create" }).click();
+
+    const testSource = await fs.readFile(path.join(workspaceDir, "tests", "admin-login.test.ts"), "utf8");
+    expect(testSource).toContain("secretProfileId");
+    expect(testSource).not.toContain("admin@example.test");
+    expect(testSource).not.toContain("do-not-write-this");
+    const summaries = await (await fetch(`${baseUrl}/api/secrets`)).text();
+    expect(summaries).toContain("Staging admin");
+    expect(summaries).not.toContain("admin@example.test");
+    expect(summaries).not.toContain("do-not-write-this");
+  });
 });

@@ -86,9 +86,13 @@ export class ProviderPlanner implements Planner {
   async next(input: PlannerInput): Promise<BrowserAction> {
     const navigation = initialNavigation(input);
     if (navigation) return navigation;
+    const compactInput = {
+      ...input,
+      history: input.history.slice(-8).map((step) => ({ index: step.index, action: step.action, validation: step.validation, result: step.result })),
+    };
     const messages = [
       { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: JSON.stringify(input) },
+      { role: "user", content: JSON.stringify(compactInput) },
     ];
     const { provider, model, apiKey } = this.settings;
     if (!model.trim()) throw new Error(`Select a model for ${provider}.`);

@@ -8,6 +8,7 @@ import {
   runTests,
   listRuns,
   getLatestRun,
+  closeWorkspaceStore,
 } from "../../packages/workspace/index.js";
 import { startCheckoutApp } from "../fixtures/checkoutApp.js";
 
@@ -36,6 +37,7 @@ describe("Workspace E2E - Failure Diagnosis & Run Observability", () => {
   browser: "obscura",
   artifacts: "./artifacts",
   tests: "./tests",
+  planner: "deterministic",
 };`;
     await fs.writeFile(configPath, configContent, "utf-8");
   });
@@ -44,6 +46,7 @@ describe("Workspace E2E - Failure Diagnosis & Run Observability", () => {
     if (checkoutApp) {
       await checkoutApp.close();
     }
+    if (workspaceDir) await closeWorkspaceStore(path.join(workspaceDir, "artifacts"));
     // Clean up workspace
     if (workspaceDir && (await fs.stat(workspaceDir).catch(() => null))) {
       await fs.rm(workspaceDir, { recursive: true, force: true });

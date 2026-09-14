@@ -29,6 +29,23 @@ export {
 export { runTest, runTests, runSuite, type RunResult } from "./runner.js";
 export { ProviderPlanner, type ExternalProvider, type ProviderSettings } from "./provider-planner.js";
 export {
+  workspaceDatabase,
+  flushWorkspaceStore,
+  listStoredRecords,
+  getStoredRecord,
+  storeRunArtifacts,
+  acquireRunArtifact,
+  listRunArtifacts,
+  saveSecretProfile,
+  listSecretProfiles,
+  revealSecretProfile,
+  deleteSecretProfile,
+  closeWorkspaceStore,
+  type SecretKind,
+  type SecretProfileSummary,
+  type ArtifactRecord,
+} from "./workspace-store.js";
+export {
   createHealCandidate,
   acceptHealCandidate,
   loadHealAttempt,

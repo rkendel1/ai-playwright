@@ -44,6 +44,7 @@ export async function discoverTests(testsDir: string): Promise<TestDefinition[]>
               name: typeof testDef.name === "string" ? testDef.name : id,
               task: typeof testDef.task === "string" ? testDef.task : "",
               url: typeof testDef.url === "string" ? testDef.url : undefined,
+              secretProfileId: typeof testDef.secretProfileId === "string" ? testDef.secretProfileId : undefined,
             });
           }
         } catch {

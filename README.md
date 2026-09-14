@@ -20,6 +20,7 @@ npx runora
 - Playwright executor adapter (`packages/core/executor.ts`)
 - Observe → WebLLM inference → schema validation → semantic/policy validation → execute loop (`packages/core/task.ts`)
 - Structured trace + screenshots under `.artifacts/task-xxx/`
+- Local FeltDB 0.10 storage for run history, artifact content, and encrypted secret profiles
 - TypeScript API (`packages/core/index.ts`)
 - CLI (`packages/cli/index.ts`)
 - Demo fixture + integration tests (`tests/integration/mvp.test.ts`)
@@ -62,11 +63,26 @@ Ollama service and presents them in a dropdown; use **Refresh** after installing
 a new model. You can optionally change the default endpoint
 `http://127.0.0.1:11434`. This HTTP-based discovery works the same way on macOS,
 Windows, and Linux and does not depend on platform-specific install paths. For
-OpenAI or Claude, select the provider and enter an API key. Runora loads the
+OpenAI or Claude, select the provider and choose a saved API key (or enter a
+temporary one). Runora loads the
 models available to that provider account into a dropdown. You may instead start Runora with
 `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in the environment. Typed and
 environment credentials stay in the local Runora process; they are not written
 to configuration, test definitions, run history, screenshots, or evidence.
+
+Use **Secrets Vault** to save reusable website login profiles and OpenAI or
+Claude API keys. When creating a test, select a login profile; the test file
+stores only its vault ID. Runora fills username/email and password fields
+locally, redacts their values before any planner request or trace write, and
+masks editable fields in screenshots. Vault values are encrypted with AES-256-GCM
+before being stored in the workspace-local FeltDB database. The key and database
+live under `.runora/`, which `init` adds to `.gitignore`. Set a base64-encoded
+32-byte `RUNORA_VAULT_KEY` to manage the encryption key externally.
+
+FeltDB is the durable local index for run history, suite history, secret
+profiles, and content-addressed evidence. Playwright still materializes evidence
+files under `artifacts/` so screenshots and traces remain easy to open and
+download; Runora can recover stored evidence content through FeltDB.
 
 On the first intelligent run, the workspace downloads the model weights directly
 in the browser and displays loading progress. The browser caches those weights

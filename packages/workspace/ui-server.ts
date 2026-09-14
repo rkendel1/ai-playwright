@@ -18,6 +18,15 @@ import {
   getTest,
   createHealCandidate,
   acceptHealCandidate,
+  listStoredRecords,
+  getStoredRecord,
+  acquireRunArtifact,
+  listRunArtifacts,
+  saveSecretProfile,
+  listSecretProfiles,
+  revealSecretProfile,
+  deleteSecretProfile,
+  closeWorkspaceStore,
 } from "./index.js";
 import type { ResolvedConfig, TestDefinition } from "./index.js";
 import type { BrowserAction } from "../core/actions.js";
@@ -126,10 +135,20 @@ class BrowserPlannerBroker implements Planner {
     else pending.reject(new Error("Browser WebLLM returned no action."));
     return true;
   }
+
+  cancelAll(reason = "Test stopped by user.") {
+    this.requests = [];
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error(reason));
+    }
+    this.pending.clear();
+  }
 }
 
 const browserPlanner = new BrowserPlannerBroker();
 let providerSettings: ProviderSettings | undefined;
+let activeRun: AbortController | undefined;
 
 function plannerForRun(config: ResolvedConfig): Planner | undefined {
   if (config.planner === "webllm") return browserPlanner;
@@ -188,13 +207,19 @@ function resolveEvidenceDirectory(run: any): string | null {
   return taskDir ? path.join(fallback, taskDir.name) : fallback;
 }
 
-function evidenceManifest(run: any) {
+async function evidenceManifest(run: any, artifactsDir: string) {
   const directory = resolveEvidenceDirectory(run);
   if (!directory || !fs.existsSync(directory)) {
+    const stored = await listRunArtifacts(artifactsDir, run.id);
+    const screenshots = stored.filter((entry) => /\.(png|jpe?g|webp)$/i.test(entry.relativePath)).map((entry) => ({
+      name: entry.relativePath,
+      url: `/api/runs/${run.id}/evidence/${encodeURIComponent(entry.relativePath)}`,
+    }));
+    const traceEntry = stored.find((entry) => entry.relativePath === "trace.json");
     return {
       directory: typeof run?.evidence === "string" ? run.evidence : null,
-      screenshots: [],
-      trace: null,
+      screenshots,
+      trace: traceEntry ? { name: traceEntry.relativePath, url: `/api/runs/${run.id}/evidence/${encodeURIComponent(traceEntry.relativePath)}` } : null,
     };
   }
 
@@ -276,8 +301,20 @@ export async function startUIServer(
   currentConfig = await resolveConfig(workspaceDir);
 
   const server = http.createServer(async (req, res) => {
-    // CORS headers
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    // The workspace owns local credentials. Reject cross-origin browser calls
+    // so another website cannot operate the vault through localhost.
+    const requestOrigin = req.headers.origin;
+    if (requestOrigin) {
+      let sameOrigin = false;
+      try { sameOrigin = new URL(requestOrigin).host === req.headers.host; } catch { /* reject below */ }
+      if (!sameOrigin) {
+        res.writeHead(403, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Cross-origin workspace access is not allowed" }));
+        return;
+      }
+    }
+    if (requestOrigin) res.setHeader("Access-Control-Allow-Origin", requestOrigin);
+    res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -378,10 +415,14 @@ export async function startUIServer(
           : body.provider === "anthropic"
             ? process.env.ANTHROPIC_API_KEY
             : undefined;
+        const saved = typeof body.secretProfileId === "string" && body.secretProfileId
+          ? await revealSecretProfile(currentConfig.artifacts, body.secretProfileId)
+          : null;
+        if (saved && saved.summary.kind !== body.provider) throw new Error(`Selected vault entry is for ${saved.summary.kind}, not ${body.provider}`);
         providerSettings = {
           provider: body.provider,
           model: body.model.trim(),
-          apiKey: (typeof body.apiKey === "string" ? body.apiKey.trim() : "") || environmentKey,
+          apiKey: saved?.values.apiKey || (typeof body.apiKey === "string" ? body.apiKey.trim() : "") || environmentKey,
           baseUrl: typeof body.baseUrl === "string" ? body.baseUrl.trim() : undefined,
         };
         if (body.provider !== "ollama" && !providerSettings.apiKey) {
@@ -418,7 +459,11 @@ export async function startUIServer(
         const body = await parseJsonBody(req);
         if (!["ollama", "openai", "anthropic"].includes(body.provider)) throw new Error("Unsupported provider");
         const environmentKey = body.provider === "openai" ? process.env.OPENAI_API_KEY : body.provider === "anthropic" ? process.env.ANTHROPIC_API_KEY : undefined;
-        const key = (typeof body.apiKey === "string" ? body.apiKey.trim() : "") || environmentKey || "";
+        const saved = typeof body.secretProfileId === "string" && body.secretProfileId
+          ? await revealSecretProfile(currentConfig.artifacts, body.secretProfileId)
+          : null;
+        if (saved && saved.summary.kind !== body.provider) throw new Error(`Selected vault entry is for ${saved.summary.kind}, not ${body.provider}`);
+        const key = saved?.values.apiKey || (typeof body.apiKey === "string" ? body.apiKey.trim() : "") || environmentKey || "";
         const baseUrl = typeof body.baseUrl === "string" ? body.baseUrl.trim() : undefined;
         const models = body.provider === "ollama"
           ? await discoverOllamaModels(baseUrl)
@@ -432,14 +477,58 @@ export async function startUIServer(
       return;
     }
 
+    // Vault metadata is safe to return; decrypted values never leave this process.
+    if (pathname === "/api/secrets" && req.method === "GET") {
+      try {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(await listSecretProfiles(currentConfig.artifacts)));
+      } catch (error) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+      }
+      return;
+    }
+
+    if (pathname === "/api/secrets" && req.method === "POST") {
+      try {
+        const body = await parseJsonBody(req);
+        if (!["credentials", "openai", "anthropic"].includes(body.kind)) throw new Error("Unsupported secret profile type");
+        const profile = await saveSecretProfile(currentConfig.artifacts, {
+          id: typeof body.id === "string" ? body.id : undefined,
+          name: body.name,
+          kind: body.kind,
+          values: body.values && typeof body.values === "object" ? body.values : {},
+        });
+        res.writeHead(201, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(profile));
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+      }
+      return;
+    }
+
+    if (pathname?.startsWith("/api/secrets/") && req.method === "DELETE") {
+      try {
+        await deleteSecretProfile(currentConfig.artifacts, decodeURIComponent(pathname.split("/")[3]));
+        res.writeHead(204);
+        res.end();
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+      }
+      return;
+    }
+
     // API: Get tests
     if (pathname === "/api/tests" && req.method === "GET") {
       try {
         const tests = await discoverTests(currentConfig.tests);
         currentTests = tests;
 
+        const storedRuns = await listStoredRecords<any>(currentConfig.artifacts, "runs");
         const testsWithStatus = tests.map((test) => {
-          const latestRun = listRuns(currentConfig.artifacts).find((r) => r.testId === test.id);
+          const latestRun = storedRuns.find((r) => r.testId === test.id);
           return {
             ...test,
             status: latestRun?.status || "new",
@@ -469,6 +558,7 @@ export async function startUIServer(
           name: body.name || "Untitled",
           task: body.task || "Test task",
           url: body.url,
+          secretProfileId: body.secretProfileId,
         });
 
         // Refresh test list
@@ -494,7 +584,7 @@ export async function startUIServer(
           return;
         }
 
-        const latestRun = listRuns(currentConfig.artifacts).find((r) => r.testId === test.id);
+        const latestRun = (await listStoredRecords<any>(currentConfig.artifacts, "runs")).find((r) => r.testId === test.id);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({
           ...test,
@@ -554,7 +644,7 @@ export async function startUIServer(
     if (pathname && pathname.startsWith("/api/tests/") && pathname.endsWith("/runs") && req.method === "GET") {
       try {
         const testId = pathname.split("/")[3];
-        const runs = listRuns(currentConfig.artifacts)
+        const runs = (await listStoredRecords<any>(currentConfig.artifacts, "runs"))
           .filter((r) => r.testId === testId)
           .sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
 
@@ -574,9 +664,15 @@ export async function startUIServer(
         try {
           const runId = evidenceMatch[1];
           const fileName = decodeURIComponent(evidenceMatch[2]);
-          const run = loadRun(currentConfig.artifacts, runId);
+          const run = await getStoredRecord<any>(currentConfig.artifacts, "runs", runId) ?? loadRun(currentConfig.artifacts, runId);
           const filePath = resolveEvidenceFile(run, fileName);
           if (!filePath) {
+            const stored = await acquireRunArtifact(currentConfig.artifacts, runId, fileName);
+            if (stored) {
+              res.writeHead(200, { "Content-Type": stored.contentType, "Content-Length": stored.bytes.byteLength });
+              res.end(Buffer.from(stored.bytes));
+              return;
+            }
             res.writeHead(404, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Evidence file not found" }));
             return;
@@ -593,11 +689,11 @@ export async function startUIServer(
       // API: Get single run
       try {
         const runId = pathname.split("/")[3];
-        const run = loadRun(currentConfig.artifacts, runId);
+        const run = await getStoredRecord<any>(currentConfig.artifacts, "runs", runId) ?? loadRun(currentConfig.artifacts, runId);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({
           ...run,
-          evidenceFiles: evidenceManifest(run),
+          evidenceFiles: await evidenceManifest(run, currentConfig.artifacts),
         }));
       } catch (error) {
         res.writeHead(404, { "Content-Type": "application/json" });
@@ -647,7 +743,7 @@ export async function startUIServer(
     if (pathname === "/api/suite-runs" && req.method === "GET") {
       try {
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(listSuiteRuns(currentConfig.artifacts)));
+        res.end(JSON.stringify((await listStoredRecords<any>(currentConfig.artifacts, "suite_runs")).sort((a, b) => b.startedAt - a.startedAt)));
       } catch {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Unable to run suite" }));
@@ -659,7 +755,7 @@ export async function startUIServer(
     if (pathname && pathname.startsWith("/api/suite-runs/") && req.method === "GET") {
       try {
         const suiteRunId = pathname.split("/")[3];
-        const suiteRun = loadSuiteRun(currentConfig.artifacts, suiteRunId);
+        const suiteRun = await getStoredRecord<any>(currentConfig.artifacts, "suite_runs", suiteRunId) ?? loadSuiteRun(currentConfig.artifacts, suiteRunId);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(suiteRun));
       } catch (error) {
@@ -669,9 +765,22 @@ export async function startUIServer(
       return;
     }
 
+    if (pathname === "/api/runs/stop" && req.method === "POST") {
+      const stopped = Boolean(activeRun);
+      activeRun?.abort();
+      browserPlanner.cancelAll();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ stopped }));
+      return;
+    }
+
     // API: Run full suite
     if (pathname === "/api/suite/run" && req.method === "POST") {
+      let controller: AbortController | undefined;
       try {
+        if (activeRun) throw new Error("A run is already active");
+        controller = new AbortController();
+        activeRun = controller;
         currentTests = await discoverTests(currentConfig.tests);
         if (currentTests.length === 0) {
           res.writeHead(400, { "Content-Type": "application/json" });
@@ -681,20 +790,27 @@ export async function startUIServer(
 
         const runConfig = configForRun(parsedUrl.query.headed, parsedUrl.query.planner);
         const suiteRun = await runSuite(currentTests, runConfig, {
-          runOne: (test, config) => runTest(test, config, plannerForRun(config)),
+          runOne: (test, config) => runTest(test, config, plannerForRun(config), controller?.signal),
+          signal: controller.signal,
         });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(suiteRun));
       } catch {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Unable to run suite" }));
+      } finally {
+        if (activeRun === controller) activeRun = undefined;
       }
       return;
     }
 
     // API: Run test
     if (pathname && pathname.startsWith("/api/tests/") && pathname.endsWith("/run") && req.method === "POST") {
+      let controller: AbortController | undefined;
       try {
+        if (activeRun) throw new Error("A run is already active");
+        controller = new AbortController();
+        activeRun = controller;
         const testId = pathname.split("/")[3];
         const test = currentTests.find((t) => t.id === testId);
         if (!test) {
@@ -704,12 +820,14 @@ export async function startUIServer(
         }
 
         const runConfig = configForRun(parsedUrl.query.headed, parsedUrl.query.planner);
-        const result = await runTest(test, runConfig, plannerForRun(runConfig));
+        const result = await runTest(test, runConfig, plannerForRun(runConfig), controller.signal);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(result));
       } catch (error) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: String(error) }));
+      } finally {
+        if (activeRun === controller) activeRun = undefined;
       }
       return;
     }
@@ -738,6 +856,7 @@ export async function startUIServer(
     });
   });
 
+  server.once("close", () => { void closeWorkspaceStore(currentConfig.artifacts); });
   return server;
 }
 

@@ -9,6 +9,7 @@ import {
   runTests,
   runSuite,
   getLatestRun,
+  listStoredRecords,
 } from "../workspace/index.js";
 import { startUIServer } from "../workspace/ui-server.js";
 import { formatRunResult, formatRunSummary, formatSuiteRun } from "./result-formatter.js";
@@ -30,6 +31,15 @@ export async function initWorkspace(workspaceDir: string): Promise<void> {
   if (!fs.existsSync(artifactsDir)) {
     fs.mkdirSync(artifactsDir, { recursive: true });
   }
+  fs.mkdirSync(path.join(workspaceDir, ".runora"), { recursive: true });
+
+  const gitignorePath = path.join(workspaceDir, ".gitignore");
+  const existingIgnore = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, "utf8") : "";
+  const additions = [".runora/", "artifacts/"].filter((entry) => !existingIgnore.split(/\r?\n/).includes(entry));
+  if (additions.length) {
+    const prefix = existingIgnore && !existingIgnore.endsWith("\n") ? "\n" : "";
+    fs.appendFileSync(gitignorePath, `${prefix}${additions.join("\n")}\n`, "utf8");
+  }
 
   // Create config file
   const configPath = path.join(workspaceDir, "runora.config.ts");
@@ -41,6 +51,7 @@ export async function initWorkspace(workspaceDir: string): Promise<void> {
   console.log(`  Config: ${configPath}`);
   console.log(`  Tests: ${testsDir}`);
   console.log(`  Artifacts: ${artifactsDir}`);
+  console.log(`  Local state: ${path.join(workspaceDir, ".runora")}`);
 }
 
 export async function runTestCommand(
@@ -105,7 +116,7 @@ export async function runTestCommand(
   for (const test of testsToRun) {
     const result = results.find((r) => r.testId === test.id);
     if (result) {
-      const run = getLatestRun(config.artifacts, test.id);
+      const run = (await listStoredRecords<any>(config.artifacts, "runs")).find((entry) => entry.testId === test.id) ?? getLatestRun(config.artifacts, test.id);
       const output = formatRunResult(
         test.name,
         result.status,
@@ -149,8 +160,9 @@ export async function listTestsCommand(workspaceDir?: string): Promise<void> {
   }
 
   console.log("\nTests:");
+  const storedRuns = await listStoredRecords<any>(config.artifacts, "runs");
   for (const test of tests) {
-    const latest = getLatestRun(config.artifacts, test.id);
+    const latest = storedRuns.find((entry) => entry.testId === test.id) ?? getLatestRun(config.artifacts, test.id);
     const status = latest
       ? latest.status === "passed"
         ? "✓"

@@ -3,6 +3,7 @@ import path from "node:path";
 import type { RunMetadata } from "./test-model.js";
 import type { FailureDiagnosis } from "./failure-model.js";
 import { diagnoseFailure } from "./failure-model.js";
+import { queueRecord } from "./workspace-store.js";
 
 /**
  * Simple run storage in artifacts directory
@@ -63,18 +64,9 @@ export function createRun(
 
   // Write initial metadata
   const runPath = getRunPath(artifactsDir, runId);
-  fs.writeFileSync(
-    runPath,
-    JSON.stringify(
-      {
-        ...metadata,
-        evidence: evidencePath,
-      },
-      null,
-      2
-    ),
-    "utf-8"
-  );
+  const stored = { ...metadata, evidence: evidencePath };
+  fs.writeFileSync(runPath, JSON.stringify(stored, null, 2), "utf-8");
+  queueRecord(artifactsDir, "runs", stored);
 
   return { runId, metadata };
 }
@@ -105,6 +97,7 @@ export function updateRun(
   }
 
   fs.writeFileSync(runPath, JSON.stringify(updated, null, 2), "utf-8");
+  queueRecord(artifactsDir, "runs", updated);
 }
 
 export function loadRun(artifactsDir: string, runId: string): StoredRun {

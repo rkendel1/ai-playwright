@@ -39,6 +39,7 @@ export function createTest(
   name: "${escapeString(testDef.name)}",
   task: "${escapeString(testDef.task)}",${
     testDef.url ? `\n  url: "${escapeString(testDef.url)}",` : ""
+  }${testDef.secretProfileId ? `\n  secretProfileId: "${escapeString(testDef.secretProfileId)}",` : ""
   }
 };
 `;
@@ -50,6 +51,7 @@ export function createTest(
     name: testDef.name,
     task: testDef.task,
     url: testDef.url,
+    secretProfileId: testDef.secretProfileId,
   };
 }
 
@@ -77,6 +79,9 @@ export function updateTest(
     name: updates.name ?? (typeof current.name === "string" ? current.name : testId),
     task: updates.task ?? (typeof current.task === "string" ? current.task : ""),
     url: updates.url ?? (typeof current.url === "string" ? current.url : undefined),
+    secretProfileId: Object.prototype.hasOwnProperty.call(updates, "secretProfileId")
+      ? (typeof updates.secretProfileId === "string" ? updates.secretProfileId : undefined)
+      : (typeof current.secretProfileId === "string" ? current.secretProfileId : undefined),
   };
 
   // Write updated file
@@ -85,6 +90,7 @@ export function updateTest(
   name: "${updated.name.replace(/"/g, '\\"')}",
   task: "${updated.task.replace(/"/g, '\\"')}",${
     updated.url ? `\n  url: "${updated.url.replace(/"/g, '\\"')}",` : ""
+  }${updated.secretProfileId ? `\n  secretProfileId: "${updated.secretProfileId.replace(/"/g, '\\"')}",` : ""
   }
 };
 `;
@@ -123,6 +129,7 @@ export function getTest(
       name: typeof def.name === "string" ? def.name : testId,
       task: typeof def.task === "string" ? def.task : "",
       url: typeof def.url === "string" ? def.url : undefined,
+      secretProfileId: typeof def.secretProfileId === "string" ? def.secretProfileId : undefined,
     };
   } catch {
     return null;

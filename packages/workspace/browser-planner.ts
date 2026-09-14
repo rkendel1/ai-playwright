@@ -98,9 +98,19 @@ async function answer(request: { id: string; input: unknown }) {
       return;
     }
     const model = await engine();
+    const fullInput = request.input as { history?: Array<Record<string, unknown>> };
+    const compactInput = {
+      ...fullInput,
+      history: (fullInput.history || []).slice(-8).map((step) => ({
+        index: step.index,
+        action: step.action,
+        validation: step.validation,
+        result: step.result,
+      })),
+    };
     const messages = [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: JSON.stringify(request.input) },
+        { role: "user", content: JSON.stringify(compactInput) },
       ] as Array<{ role: "system" | "user" | "assistant"; content: string }>;
     let action: unknown;
     let lastContent = "";

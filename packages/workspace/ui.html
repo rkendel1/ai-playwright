@@ -593,7 +593,7 @@
         <div><span>Execution</span><strong>Playwright</strong></div>
         <div><span>Browser</span><strong>Obscura</strong></div>
         <div><span>Semantic control</span><strong>aipw-core</strong></div>
-        <div><span>Persistence</span><strong>Workspace filesystem</strong></div>
+        <div><span>Persistence</span><strong>Local FeltDB</strong></div>
       </div>
     </div>
 
@@ -620,6 +620,10 @@
             <small id="model-status" class="muted">Preparing intelligent planner…</small>
           </label>
           <div id="provider-settings" style="display: none; gap: 10px; margin-bottom: 12px;">
+            <label id="provider-secret-field" style="display: grid; gap: 6px;">
+              <span>Saved API key</span>
+              <select id="provider-secret" onchange="document.getElementById('planner-mode').value === 'ollama' ? undefined : loadProviderModels()"><option value="">Use a temporary key or environment variable</option></select>
+            </label>
             <label id="cloud-model-field" style="display: grid; gap: 6px;">
               <span>Model</span>
               <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px;">
@@ -641,11 +645,12 @@
               <input id="provider-base-url" type="url" autocomplete="off" placeholder="Provider default" onchange="document.getElementById('planner-mode').value === 'ollama' ? loadOllamaModels() : loadProviderModels()" />
             </label>
             <label id="provider-key-field" style="display: grid; gap: 6px;">
-              <span>API key</span>
+              <span>API key (temporary)</span>
               <input id="provider-api-key" type="password" autocomplete="off" placeholder="Or use provider environment variable" onchange="loadProviderModels()" />
             </label>
-            <small class="muted">Credentials remain only in this local Runora process and are never written to tests or evidence.</small>
+            <small class="muted">Temporary credentials remain only in this process. Saved keys are encrypted in the local vault and never written to tests or evidence.</small>
           </div>
+          <button class="secondary-button full-width" type="button" onclick="openVault()" style="margin-bottom: 12px;">Secrets Vault</button>
           <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
             <input id="headed-mode" type="checkbox" />
             <span>Show browser while tests run</span>
@@ -691,11 +696,35 @@
           <label for="new-test-task">Task</label>
           <textarea id="new-test-task"></textarea>
         </div>
+        <div class="form-field">
+          <label for="new-test-secret">Credential profile (optional)</label>
+          <select id="new-test-secret"><option value="">No saved credentials</option></select>
+          <small class="muted">The test stores only this vault reference—not the username or password.</small>
+        </div>
       </div>
       <div class="modal-actions">
         <button class="ghost-button" type="button" onclick="closeNewTestForm()">Cancel</button>
         <button class="primary-button" type="button" onclick="submitNewTestForm()">Create</button>
       </div>
+    </div>
+  </div>
+
+  <div id="vault-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="vault-title">
+    <div class="modal-card">
+      <div class="split-header">
+        <div><p class="eyebrow">Local encrypted storage</p><h2 id="vault-title">Secrets Vault</h2><p class="muted">Save login pairs and LLM keys for reuse. Values are never displayed again.</p></div>
+      </div>
+      <div id="vault-list" style="display:grid;gap:8px;margin:16px 0;"></div>
+      <div class="form-grid">
+        <div class="form-field"><label for="vault-name">Profile name</label><input id="vault-name" autocomplete="off" placeholder="Staging admin" /></div>
+        <div class="form-field"><label for="vault-kind">Type</label><select id="vault-kind" onchange="syncVaultFields()"><option value="credentials">Website login</option><option value="openai">OpenAI API key</option><option value="anthropic">Claude API key</option></select></div>
+        <div id="vault-credentials-fields" style="display:grid;gap:12px;">
+          <div class="form-field"><label for="vault-username">Username or email</label><input id="vault-username" autocomplete="off" /></div>
+          <div class="form-field"><label for="vault-password">Password</label><input id="vault-password" type="password" autocomplete="new-password" /></div>
+        </div>
+        <div id="vault-api-key-field" class="form-field" style="display:none;"><label for="vault-api-key">API key</label><input id="vault-api-key" type="password" autocomplete="new-password" /></div>
+      </div>
+      <div class="modal-actions"><button class="ghost-button" type="button" onclick="closeVault()">Close</button><button class="primary-button" type="button" onclick="saveVaultSecret()">Save Secret</button></div>
     </div>
   </div>
 
@@ -717,6 +746,7 @@
       runningTest: null,
       runningSuite: null,
       editTestId: null,
+      secrets: [],
     };
     let feedbackTimer = null;
 
@@ -791,6 +821,82 @@
 
     function selectedTest() {
       return state.tests.find((test) => test.id === state.selectedTestId) || null;
+    }
+
+    function secretOptions(kind, emptyLabel) {
+      return '<option value="">' + escapeHtml(emptyLabel) + '</option>' + state.secrets
+        .filter((profile) => !kind || profile.kind === kind)
+        .map((profile) => '<option value="' + escapeHtml(profile.id) + '">' + escapeHtml(profile.name) + '</option>')
+        .join('');
+    }
+
+    function syncSecretSelectors() {
+      const testSelect = document.getElementById('new-test-secret');
+      if (testSelect) {
+        const selected = testSelect.value;
+        testSelect.innerHTML = secretOptions('credentials', 'No saved credentials');
+        if (state.secrets.some((profile) => profile.id === selected)) testSelect.value = selected;
+      }
+      const provider = document.getElementById('planner-mode')?.value;
+      const providerSelect = document.getElementById('provider-secret');
+      if (providerSelect) {
+        const selected = providerSelect.value;
+        providerSelect.innerHTML = secretOptions(provider === 'openai' || provider === 'anthropic' ? provider : null, 'Use a temporary key or environment variable');
+        if (state.secrets.some((profile) => profile.id === selected)) providerSelect.value = selected;
+      }
+    }
+
+    async function loadSecrets() {
+      const response = await fetch('/api/secrets');
+      const payload = await readResponseBody(response);
+      if (!response.ok) throw new Error(payload.error || response.statusText);
+      state.secrets = Array.isArray(payload) ? payload : [];
+      syncSecretSelectors();
+      renderVaultList();
+    }
+
+    function openVault() {
+      document.getElementById('vault-modal').classList.remove('hidden');
+      syncVaultFields();
+      renderVaultList();
+      document.getElementById('vault-name').focus();
+    }
+
+    function closeVault() { document.getElementById('vault-modal').classList.add('hidden'); }
+
+    function syncVaultFields() {
+      const credentials = document.getElementById('vault-kind').value === 'credentials';
+      document.getElementById('vault-credentials-fields').style.display = credentials ? 'grid' : 'none';
+      document.getElementById('vault-api-key-field').style.display = credentials ? 'none' : 'grid';
+    }
+
+    function renderVaultList() {
+      const list = document.getElementById('vault-list');
+      if (!list) return;
+      list.innerHTML = state.secrets.length ? state.secrets.map((profile) => `
+        <div class="evidence-card"><div class="status-row"><div><strong>${escapeHtml(profile.name)}</strong><div class="small-text">${escapeHtml(profile.kind)} · ${escapeHtml(profile.fields.join(', '))}</div></div><button class="danger-button" type="button" onclick="deleteVaultSecret('${escapeHtml(profile.id)}')">Delete</button></div></div>
+      `).join('') : '<div class="small-text">No saved secrets yet.</div>';
+    }
+
+    async function saveVaultSecret() {
+      const kind = document.getElementById('vault-kind').value;
+      const values = kind === 'credentials'
+        ? { username: document.getElementById('vault-username').value, password: document.getElementById('vault-password').value }
+        : { apiKey: document.getElementById('vault-api-key').value };
+      const response = await fetch('/api/secrets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: document.getElementById('vault-name').value, kind, values }) });
+      const payload = await readResponseBody(response);
+      if (!response.ok) { showFeedback('Unable to save secret.', payload.error); return; }
+      ['vault-name', 'vault-username', 'vault-password', 'vault-api-key'].forEach((id) => { document.getElementById(id).value = ''; });
+      await loadSecrets();
+      showFeedback('Secret saved in the local encrypted vault.');
+    }
+
+    async function deleteVaultSecret(id) {
+      if (!confirm('Delete this saved secret? Tests using it will need another credential profile.')) return;
+      const response = await fetch('/api/secrets/' + encodeURIComponent(id), { method: 'DELETE' });
+      if (!response.ok) { const payload = await readResponseBody(response); showFeedback('Unable to delete secret.', payload.error); return; }
+      await loadSecrets();
+      showFeedback('Secret deleted.');
     }
 
     function setSelectedTest(testId) {
@@ -1311,7 +1417,10 @@
             <h2 style="margin-bottom: 6px;">${escapeHtml(running.name)}</h2>
             <p class="muted">Runora is actively planning and executing this test.</p>
           </div>
-          <span class="status-pill running">Running</span>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <span class="status-pill running">${state.isStopping ? 'Stopping…' : 'Running'}</span>
+            <button class="danger-button" type="button" onclick="stopActiveRun()" ${state.isStopping ? 'disabled' : ''}>Stop Test</button>
+          </div>
         </div>
 
         <div class="summary-grid">
@@ -1351,7 +1460,10 @@
             <h2 style="margin-bottom: 6px;">Test Suite</h2>
             <p class="muted">Running the full workspace suite and collecting durable evidence.</p>
           </div>
-          <span class="status-pill running">Running…</span>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <span class="status-pill running">${state.isStopping ? 'Stopping…' : 'Running…'}</span>
+            <button class="danger-button" type="button" onclick="stopActiveRun()" ${state.isStopping ? 'disabled' : ''}>Stop Suite</button>
+          </div>
         </div>
 
         <div class="summary-grid">
@@ -1625,7 +1737,7 @@
 
     async function refresh() {
       try {
-        await Promise.all([loadTests(), loadSuiteRuns()]);
+        await Promise.all([loadTests(), loadSuiteRuns(), loadSecrets()]);
       } catch (error) {
         document.getElementById('result-content').innerHTML = '<div class="empty-state"><h3>Unable to load workspace</h3><p>' + escapeHtml(String(error)) + '</p></div>';
       }
@@ -1640,6 +1752,8 @@
       document.getElementById('new-test-name').value = '';
       document.getElementById('new-test-url').value = 'http://localhost:3000';
       document.getElementById('new-test-task').value = '';
+      syncSecretSelectors();
+      document.getElementById('new-test-secret').value = '';
       document.getElementById('new-test-modal').classList.remove('hidden');
       document.getElementById('new-test-name').focus();
     }
@@ -1654,6 +1768,8 @@
       document.getElementById('new-test-name').value = test.name;
       document.getElementById('new-test-url').value = test.url || '';
       document.getElementById('new-test-task').value = test.task;
+      syncSecretSelectors();
+      document.getElementById('new-test-secret').value = test.secretProfileId || '';
       document.getElementById('new-test-modal').classList.remove('hidden');
       document.getElementById('new-test-name').focus();
     }
@@ -1667,6 +1783,7 @@
       const name = document.getElementById('new-test-name').value.trim();
       const url = document.getElementById('new-test-url').value.trim();
       const task = document.getElementById('new-test-task').value.trim();
+      const secretProfileId = document.getElementById('new-test-secret').value;
       if (!name || !task) {
         alert('Name and task are required.');
         return;
@@ -1680,7 +1797,7 @@
         const response = await fetch(endpoint, {
           method,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, task, url: url || undefined }),
+          body: JSON.stringify({ name, task, url: url || undefined, secretProfileId: secretProfileId || null }),
         });
         const payload = await readResponseBody(response);
         if (!response.ok) {
@@ -1792,11 +1909,12 @@
           : document.getElementById('provider-model').value;
         const baseUrl = document.getElementById('provider-base-url').value.trim();
         const apiKey = document.getElementById('provider-api-key').value.trim();
+        const secretProfileId = document.getElementById('provider-secret').value;
         try {
           const response = await fetch('/api/planner/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ provider, model, baseUrl, apiKey }),
+            body: JSON.stringify({ provider, model, baseUrl, apiKey, secretProfileId }),
           });
           const payload = response.ok ? null : await readResponseBody(response);
           if (!response.ok) throw new Error(payload?.error || response.statusText);
@@ -1829,6 +1947,7 @@
       const external = ['ollama', 'openai', 'anthropic'].includes(provider);
       settings.style.display = external ? 'grid' : 'none';
       keyField.style.display = provider === 'ollama' ? 'none' : 'grid';
+      document.getElementById('provider-secret-field').style.display = provider === 'ollama' ? 'none' : 'grid';
       cloudModelField.style.display = provider === 'ollama' ? 'none' : 'grid';
       ollamaModelField.style.display = provider === 'ollama' ? 'grid' : 'none';
       endpoint.placeholder = provider === 'ollama'
@@ -1838,6 +1957,7 @@
           : 'https://api.anthropic.com';
       const status = document.getElementById('model-status');
       if (status) status.style.display = provider === 'webllm' ? 'block' : 'none';
+      syncSecretSelectors();
       if (provider === 'ollama') loadOllamaModels();
       if (provider === 'openai' || provider === 'anthropic') loadProviderModels();
     }
@@ -1850,13 +1970,14 @@
       const previous = select.value;
       const apiKey = document.getElementById('provider-api-key').value.trim();
       const baseUrl = document.getElementById('provider-base-url').value.trim();
+      const secretProfileId = document.getElementById('provider-secret').value;
       select.disabled = true;
       status.textContent = 'Loading models available to your account…';
       try {
         const response = await fetch('/api/planner/models', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider, apiKey, baseUrl }),
+          body: JSON.stringify({ provider, apiKey, baseUrl, secretProfileId }),
         });
         const payload = await readResponseBody(response);
         if (!response.ok) throw new Error(payload.error || response.statusText);
@@ -1922,6 +2043,7 @@
       const startedAt = Date.now();
       const selectedPlanner = document.getElementById('planner-mode').value;
       state.isRunning = true;
+      state.isStopping = false;
       state.runningTest = {
         id: test.id,
         name: test.name,
@@ -1950,6 +2072,7 @@
         alert('Error running test: ' + error);
       } finally {
         state.isRunning = false;
+        state.isStopping = false;
         state.runningTest = null;
         if (state.currentView === 'test-running') {
           state.currentView = 'test';
@@ -1964,6 +2087,7 @@
       const startedAt = Date.now();
       const selectedPlanner = document.getElementById('planner-mode').value;
       state.isRunning = true;
+      state.isStopping = false;
       state.runningSuite = {
         tests: state.tests.map((test) => ({
           name: test.name,
@@ -2000,8 +2124,25 @@
         alert('Error running suite: ' + error);
       } finally {
         state.isRunning = false;
+        state.isStopping = false;
         state.runningSuite = null;
         render();
+      }
+    }
+
+    async function stopActiveRun() {
+      if (!state.isRunning || state.isStopping) return;
+      state.isStopping = true;
+      render();
+      try {
+        const response = await fetch('/api/runs/stop', { method: 'POST' });
+        const payload = await readResponseBody(response);
+        if (!response.ok) throw new Error(payload.error || response.statusText);
+        showFeedback(payload.stopped ? 'Stopping the active run. Partial evidence will be preserved.' : 'No active run was found.');
+      } catch (error) {
+        state.isStopping = false;
+        render();
+        alert('Unable to stop run: ' + error);
       }
     }
 
@@ -2009,6 +2150,9 @@
       if (event.target === event.currentTarget) {
         closeNewTestForm();
       }
+    });
+    document.getElementById('vault-modal').addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) closeVault();
     });
 
     document.addEventListener('toggle', (event) => {
@@ -2020,6 +2164,7 @@
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
         closeNewTestForm();
+        closeVault();
       }
     });
 

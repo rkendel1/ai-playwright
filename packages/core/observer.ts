@@ -5,6 +5,9 @@ export type ElementObservation = {
   role?: string;
   name?: string;
   value?: string;
+  inputType?: string;
+  autocomplete?: string;
+  options?: Array<{ label: string; value: string }>;
   bounds?: {
     x: number;
     y: number;
@@ -98,7 +101,11 @@ export async function observe(page: Page): Promise<Observation> {
       const nestedTitle = (el.querySelector("svg title")?.textContent || "").trim();
       const name = ([aria, labelText, title, ariaDescription, text, placeholder, nestedTitle]
         .find((v) => v.length > 0) || tag).slice(0, 240);
-      const value = "value" in el ? String((el as HTMLInputElement).value ?? "") : undefined;
+      // Password values must never cross the browser observation boundary.
+      const value = "value" in el && inputType !== "password" ? String((el as HTMLInputElement).value ?? "") : undefined;
+      const options = tag === "select"
+        ? Array.from((el as HTMLSelectElement).options).map((option) => ({ label: option.text.trim(), value: option.value }))
+        : undefined;
       const disabled = "disabled" in el ? Boolean((el as HTMLInputElement).disabled) : el.getAttribute("aria-disabled") === "true";
       const checked = "checked" in el ? Boolean((el as HTMLInputElement).checked) : undefined;
       return {
@@ -106,6 +113,9 @@ export async function observe(page: Page): Promise<Observation> {
         role,
         name,
         value,
+        inputType,
+        autocomplete: el.getAttribute("autocomplete") || undefined,
+        options,
         bounds: {
           x: rect.x,
           y: rect.y,

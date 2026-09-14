@@ -85,7 +85,7 @@ function assertInteractive(action: BrowserAction, element: ElementObservation) {
   if (!element.state.enabled) {
     throw new Error(`Action target '${element.id}' is not enabled.`);
   }
-  if (action.type === "fill" && !["textbox", "searchbox"].includes(element.role ?? "")) {
+  if (action.type === "fill" && !["textbox", "searchbox", "combobox"].includes(element.role ?? "")) {
     throw new Error(`Fill target '${element.id}' must be an editable textbox.`);
   }
   if (action.type === "select" && element.role !== "combobox") {

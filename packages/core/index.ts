@@ -24,6 +24,7 @@ export type AiPlaywrightOptions = {
   artifactsDir?: string;
   runtime?: BrowserRuntime;
   signal?: AbortSignal;
+  secrets?: Record<string, string>;
 };
 
 export type AiPlaywrightBrowser = {
@@ -77,6 +78,7 @@ export async function aiPlaywright(options: AiPlaywrightOptions = {}): Promise<A
           artifactsRoot: options.artifactsDir ?? path.resolve(".artifacts"),
           taskId: `task-${String(taskCounter).padStart(3, "0")}`,
           signal: options.signal,
+          secrets: options.secrets,
         });
       };
 

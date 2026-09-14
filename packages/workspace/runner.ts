@@ -6,6 +6,7 @@ import type { ModelConfig, ResolvedConfig } from "./config.js";
 import { createRun, updateRun, getRunEvidencePath } from "./run-storage.js";
 import { aggregateSuiteStatus, createSuiteRun, updateSuiteRun } from "./suite-storage.js";
 import type { SuiteRun, SuiteRunEntry } from "./test-model.js";
+import { revealSecretProfile, storeRunArtifacts } from "./workspace-store.js";
 
 /**
  * Test runner: thin wrapper around existing execution path
@@ -53,6 +54,8 @@ export async function runTest(
   const evidencePath = getRunEvidencePath(config.artifacts, "current");
   const planner = plannerOverride ?? createPlanner(config);
   const model = config.planner === "webllm" ? modelName(config.model) : undefined;
+  const secretProfile = test.secretProfileId ? await revealSecretProfile(config.artifacts, test.secretProfileId) : null;
+  if (test.secretProfileId && !secretProfile) throw new Error(`Secret profile '${test.secretProfileId}' was not found in the local Runora vault.`);
 
   // Create run record
   const { runId } = createRun(config.artifacts, test.id, test.name, url, config.browser, config.planner, model);
@@ -72,6 +75,7 @@ export async function runTest(
         maxTimeMs: 300_000,
       },
       signal,
+      secrets: secretProfile?.values,
     });
 
     const taskResult = await browser.task(test.task);
@@ -85,6 +89,7 @@ export async function runTest(
       result: taskResult,
       durationMs,
     });
+    await storeRunArtifacts(config.artifacts, runId, taskResult.artifactsPath);
 
     return {
       runId,

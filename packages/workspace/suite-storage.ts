@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { SuiteRun, SuiteRunEntry, SuiteRunFinalStatus } from "./test-model.js";
+import { queueRecord } from "./workspace-store.js";
 
 export function generateSuiteRunId(): string {
   return `suite-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -33,6 +34,7 @@ export function createSuiteRun(artifactsDir: string): SuiteRun {
 
   fs.mkdirSync(evidence, { recursive: true });
   fs.writeFileSync(getSuiteRunPath(artifactsDir, id), JSON.stringify(suiteRun, null, 2), "utf-8");
+  queueRecord(artifactsDir, "suite_runs", suiteRun);
 
   return suiteRun;
 }
@@ -54,6 +56,7 @@ export function updateSuiteRun(
   }
 
   fs.writeFileSync(getSuiteRunPath(artifactsDir, suiteRunId), JSON.stringify(updated, null, 2), "utf-8");
+  queueRecord(artifactsDir, "suite_runs", updated);
   return updated;
 }
 
