@@ -1,8 +1,8 @@
-# AI Playwright WASM Kernel
+# Runora WASM Kernel
 
 ## Overview
 
-The AI Playwright WASM Kernel is a **runtime-independent, portable state machine** for deterministic browser automation. It can execute entirely within a WASM module with planners and browser runtimes supplied as adapters.
+The Runora WASM Kernel is a **runtime-independent, portable state machine** for deterministic browser automation. It can execute entirely within a WASM module with planners and browser runtimes supplied as adapters.
 
 The kernel proves the architectural boundary: the deterministic control loop is separated from specific implementations (WebLLM, Playwright, Obscura, etc.).
 
