@@ -347,7 +347,7 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
         res.end(JSON.stringify(attempt));
       } catch (error) {
         res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+        res.end(JSON.stringify({ error: "Unable to create heal candidate" }));
       }
       return;
     }
@@ -366,7 +366,7 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
         res.end(JSON.stringify(attempt));
       } catch (error) {
         res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+        res.end(JSON.stringify({ error: "Unable to accept heal candidate" }));
       }
       return;
     }
