@@ -5,6 +5,12 @@ export type ElementObservation = {
   role?: string;
   name?: string;
   value?: string;
+  bounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
   state: {
     visible: boolean;
     enabled: boolean;
@@ -17,6 +23,14 @@ export type Observation = {
   generation: number;
   url: string;
   title: string;
+  viewport?: {
+    width: number;
+    height: number;
+    scrollX: number;
+    scrollY: number;
+    pageWidth: number;
+    pageHeight: number;
+  };
   elements: ElementObservation[];
   text?: string;
 };
@@ -79,6 +93,12 @@ export async function observe(page: Page): Promise<Observation> {
         role,
         name,
         value,
+        bounds: {
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+        },
         state: {
           visible,
           enabled: !disabled,
@@ -94,6 +114,22 @@ export async function observe(page: Page): Promise<Observation> {
       generation,
       url: window.location.href,
       title: document.title,
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        scrollX: window.scrollX,
+        scrollY: window.scrollY,
+        pageWidth: Math.max(
+          window.innerWidth,
+          document.documentElement.scrollWidth,
+          document.body?.scrollWidth || 0
+        ),
+        pageHeight: Math.max(
+          window.innerHeight,
+          document.documentElement.scrollHeight,
+          document.body?.scrollHeight || 0
+        ),
+      },
       text: pageText,
       elements,
     };

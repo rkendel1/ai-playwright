@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import http from "node:http";
+import path from "node:path";
 import url from "node:url";
 import {
   resolveConfig,
@@ -25,6 +26,82 @@ import type { ResolvedConfig, TestDefinition } from "./index.js";
 
 let currentConfig: ResolvedConfig;
 let currentTests: TestDefinition[] = [];
+
+function contentTypeFor(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".png") return "image/png";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".json") return "application/json";
+  return "application/octet-stream";
+}
+
+function resolveEvidenceDirectory(run: any): string | null {
+  const directPath = typeof run?.result?.artifactsPath === "string" ? run.result.artifactsPath : null;
+  if (directPath && fs.existsSync(directPath)) {
+    return directPath;
+  }
+  const fallback = typeof run?.evidence === "string" ? run.evidence : null;
+  if (!fallback || !fs.existsSync(fallback)) {
+    return null;
+  }
+  const entries = fs.readdirSync(fallback, { withFileTypes: true });
+  if (entries.some((entry) => entry.isFile())) {
+    return fallback;
+  }
+  const taskDir = entries.find((entry) => entry.isDirectory() && entry.name.startsWith("task-"));
+  return taskDir ? path.join(fallback, taskDir.name) : fallback;
+}
+
+function evidenceManifest(run: any) {
+  const directory = resolveEvidenceDirectory(run);
+  if (!directory || !fs.existsSync(directory)) {
+    return {
+      directory: typeof run?.evidence === "string" ? run.evidence : null,
+      screenshots: [],
+      trace: null,
+    };
+  }
+
+  const files = fs
+    .readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .sort();
+
+  const screenshots = files
+    .filter((file) => /\.(png|jpe?g|webp)$/i.test(file))
+    .map((file) => ({
+      name: file,
+      url: `/api/runs/${run.id}/evidence/${encodeURIComponent(file)}`,
+    }));
+
+  const traceFile = files.find((file) => file === "trace.json");
+
+  return {
+    directory,
+    screenshots,
+    trace: traceFile
+      ? {
+          name: traceFile,
+          url: `/api/runs/${run.id}/evidence/${encodeURIComponent(traceFile)}`,
+        }
+      : null,
+  };
+}
+
+function resolveEvidenceFile(run: any, fileName: string): string | null {
+  const directory = resolveEvidenceDirectory(run);
+  if (!directory) {
+    return null;
+  }
+  const resolvedDir = path.resolve(directory);
+  const resolvedFile = path.resolve(directory, fileName);
+  if (path.dirname(resolvedFile) !== resolvedDir || !fs.existsSync(resolvedFile)) {
+    return null;
+  }
+  return resolvedFile;
+}
 
 async function parseJsonBody(req: http.IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -203,13 +280,38 @@ export async function startUIServer(workspaceDir: string, port: number = 3001): 
       return;
     }
 
-    // API: Get single run
+    // API: Get single run evidence file
     if (pathname && pathname.startsWith("/api/runs/") && req.method === "GET") {
+      const evidenceMatch = pathname.match(/^\/api\/runs\/([^/]+)\/evidence\/([^/]+)$/);
+      if (evidenceMatch) {
+        try {
+          const runId = evidenceMatch[1];
+          const fileName = decodeURIComponent(evidenceMatch[2]);
+          const run = loadRun(currentConfig.artifacts, runId);
+          const filePath = resolveEvidenceFile(run, fileName);
+          if (!filePath) {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Evidence file not found" }));
+            return;
+          }
+          res.writeHead(200, { "Content-Type": contentTypeFor(filePath) });
+          fs.createReadStream(filePath).pipe(res);
+        } catch {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Evidence file not found" }));
+        }
+        return;
+      }
+
+      // API: Get single run
       try {
         const runId = pathname.split("/")[3];
         const run = loadRun(currentConfig.artifacts, runId);
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(run));
+        res.end(JSON.stringify({
+          ...run,
+          evidenceFiles: evidenceManifest(run),
+        }));
       } catch (error) {
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Run not found" }));
