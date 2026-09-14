@@ -63,7 +63,7 @@ function evidenceManifest(run: any) {
     };
   }
 
-  const files = listEvidenceFiles(directory);
+  const files = listEvidenceFiles(directory).sort();
 
   const screenshots = files
     .filter((file) => /\.(png|jpe?g|webp)$/i.test(file))
@@ -113,8 +113,7 @@ function listEvidenceFiles(directory: string, prefix: string = ""): string[] {
         return listEvidenceFiles(path.join(directory, entry.name), relativePath);
       }
       return [relativePath];
-    })
-    .sort();
+    });
 }
 
 async function parseJsonBody(req: http.IncomingMessage): Promise<any> {
